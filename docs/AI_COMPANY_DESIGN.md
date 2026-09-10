@@ -414,3 +414,13 @@ Step 4  実行部（施策ごとに担当 AI が成果物を作る）
 3. 認証: Cloudflare Access（推奨）でよいか。許可するメールアドレスは何件か
 4. 見た目: 添付モックの並びを土台に、絵文字なし・番号と罫線の落ち着いた表現でよいか
 5. KPI 検証の AI 判定は次の版でよいか（MVP は代表が入力）
+
+## 13. 実装メモ（設計からの変更点）
+
+- 役割プロンプトは 1 人 1 ファイルではなく、部署ごとの 3 ファイル（`src/employees/prompts-analysis.ts` / `prompts-command.ts` / `prompts-execution.ts`）にまとめた。
+- AI 社員の初期データは `seeds/` ではなく `migrations/0002_seed_employees.sql` に置き、`wrangler d1 migrations apply` 1 回で済むようにした。
+- `kpis` に `confirmed`（AI の提案値か、代表が確定した値か）を追加。`projects` に `extra_text`（貼り付けデータ）と `analyst_mode`（自動 / 全員）を追加。
+- API を追加: `POST /api/projects/:id/cancel`（止まった分析の中止）、`GET /api/projects/metrics`（入力項目）、`POST /api/knowledge`（学びの手動追加）、`/api/auth/*`。
+- 認証は Cloudflare Access に加えて共有パスワード方式も選べる。どちらも未設定の本番環境では API を拒否する。
+- 実行担当の成果物作成と分析担当の分析は Workflow 内で並行実行し、所要時間を短縮した。
+- 動作確認用に `AI_PROVIDER=mock`（固定回答）を用意した。

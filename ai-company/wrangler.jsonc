@@ -1,0 +1,45 @@
+{
+  // ViXer AI Company — 公式 HP とは別の Worker。HP 側の設定には一切触れない。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vixer-ai-company",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  // 画面（Vite でビルドした dist/）を配信する。/api/* だけは Worker が先に処理する。
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+
+  // D1: `wrangler d1 create vixer-ai-company-db` の結果の database_id を貼る
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vixer-ai-company-db",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Workflows: 分析パイプラインと、修正依頼時の再作成
+  "workflows": [
+    { "name": "vixer-analysis-pipeline", "binding": "ANALYSIS_PIPELINE", "class_name": "AnalysisPipeline" },
+    { "name": "vixer-revision-pipeline", "binding": "REVISION_PIPELINE", "class_name": "RevisionPipeline" }
+  ],
+
+  // 秘密でない設定。秘密情報（ANTHROPIC_API_KEY, APP_PASSWORD など）は `wrangler secret put` で登録する。
+  "vars": {
+    "ENVIRONMENT": "production",
+    "AI_PROVIDER": "anthropic",
+    "AI_MODEL": "claude-opus-5",
+    "AI_MAX_OUTPUT_TOKENS": "8000",
+    "AI_EFFORT": "medium",
+    // Cloudflare Access を使う場合に設定（例: "vixer" → https://vixer.cloudflareaccess.com）
+    "CF_ACCESS_TEAM_DOMAIN": "",
+    "CF_ACCESS_AUD": ""
+  }
+}

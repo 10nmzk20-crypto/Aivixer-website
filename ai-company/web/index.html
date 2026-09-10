@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0A0A0A">
+  <title>ViXer AI Company</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Zen+Kaku+Gothic+New:wght@300;400;500&family=JetBrains+Mono:wght@300;400&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="side" id="side">
+      <div class="brand">
+        <span class="sub">Life Design ViXer · Internal</span>
+        <a class="name" href="#/">ViXer <em>AI Company</em></a>
+      </div>
+      <nav class="nav" aria-label="画面" id="nav">
+        <a href="#/" data-route="dashboard">ダッシュボード <span class="n">01</span></a>
+        <a href="#/new" data-route="new">新しい分析 <span class="n">02</span></a>
+        <a href="#/history" data-route="history">案件の履歴 <span class="n">03</span></a>
+        <a href="#/knowledge" data-route="knowledge">ナレッジ <span class="n">04</span></a>
+      </nav>
+      <div class="box">
+        <div class="eyebrow">Mission</div>
+        <p>数字と相談から「今やるべき最大 3 つ」を決め、承認を経て実行し、結果を学びとして残す。</p>
+      </div>
+      <div class="box">
+        <div class="eyebrow">Flow</div>
+        <ol>
+          <li>データ・相談を入力</li><li>分析部が事実と仮説を出す</li><li>経営司令塔が最優先 3 つに絞る</li><li>実行部が成果物を作る</li><li>代表が承認</li><li>実施 → KPI 検証 → ナレッジ</li>
+        </ol>
+      </div>
+      <div class="foot" id="side-foot">Cloudflare Workers · D1 · Workflows</div>
+    </aside>
+    <main id="main" class="main"></main>
+  </div>
+  <div class="scrim" id="scrim"></div>
+  <aside class="sheet" id="sheet" aria-label="AI 社員詳細"></aside>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
