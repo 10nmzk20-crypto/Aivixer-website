@@ -6,30 +6,16 @@ import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, VerificationSche
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
 import { detectRestrictedActions } from "../policy/restricted-actions";
+import { METRIC_GROUPS, SOURCE_LABEL, metricLabel, normalizeInputData, type NormalizedInput } from "../metrics";
+import { computeDerived, totalBookings, type DerivedKpi } from "../analysis/derived";
+import type { ComparisonResult } from "../analysis/compare";
+import { FUNNEL_STATUS_JA, type FunnelResult } from "../analysis/funnel";
 
 /**
  * AI 社員に仕事をさせる関数のまとめ。Workflow の各ステップから呼ばれる。
  * すべて「すでに保存済みなら何もしない」ように作ってあり、再実行しても二重登録しない。
  */
 
-/** 入力画面の数値項目（id と表示名） */
-export const METRICS: Array<{ id: string; label: string; unit: string }> = [
-  { id: "sales", label: "売上", unit: "円" },
-  { id: "members", label: "会員数（月末）", unit: "名" },
-  { id: "new_members", label: "新規入会", unit: "名" },
-  { id: "churn", label: "退会", unit: "名" },
-  { id: "inquiries", label: "問い合わせ", unit: "件" },
-  { id: "visits", label: "見学・体験", unit: "件" },
-  { id: "trials", label: "30日お試し 開始", unit: "名" },
-  { id: "conversions", label: "本入会（お試し経由）", unit: "名" },
-  { id: "personal_users", label: "パーソナル利用者", unit: "名" },
-  { id: "avg_visits", label: "平均来館回数（月）", unit: "回" },
-  { id: "reviews", label: "Google 口コミ数", unit: "件" },
-  { id: "web_bookings", label: "HP からの見学予約", unit: "件" },
-];
-const METRIC_LABEL = Object.fromEntries(METRICS.map((m) => [m.id, `${m.label}（${m.unit}）`]));
-
-/** 自動招集の上限。全員を動かさない（司令塔が 2〜4 名を選ぶ） */
 const MAX_ANALYSTS = 4;
 
 function system(employeeId: string, override?: string): string {
@@ -38,24 +24,115 @@ function system(employeeId: string, override?: string): string {
   return `${COMPANY_CONTEXT}\n\n${override ?? def.systemPrompt}`;
 }
 
+/**
+ * 案件の入力を AI に渡す文章にする。
+ * ブロックごとに整理し、自動計算した KPI・前月比・ファネル判定を添える。
+ * 未入力は「データなし」と明示し、集計方法が違う数字は出どころを書く。
+ */
 export function formatInput(project: ProjectRow): string {
   const lines: string[] = [];
   lines.push(`案件名: ${project.title}`);
   if (project.period_label) lines.push(`対象期間: ${project.period_label}`);
-  if (project.input_data_json) {
-    const data = JSON.parse(project.input_data_json) as Record<string, string | number>;
+
+  const input: NormalizedInput = normalizeInputData(project.input_data_json ? JSON.parse(project.input_data_json) : null);
+  const v = input.values;
+  const derivedSaved = project.derived_json ? (JSON.parse(project.derived_json) as { kpis: DerivedKpi[]; comparison: ComparisonResult }) : null;
+  const kpis = derivedSaved?.kpis ?? computeDerived(input);
+  const comparison = derivedSaved?.comparison ?? null;
+  const funnel = project.funnel_json ? (JSON.parse(project.funnel_json) as FunnelResult) : null;
+
+  // ---- 入力された数字（ブロックごと）----
+  if (Object.keys(v).length > 0) {
     lines.push("", "【入力された数字】");
-    for (const [k, v] of Object.entries(data)) lines.push(`- ${METRIC_LABEL[k] ?? k}: ${typeof v === "number" ? v.toLocaleString("ja-JP") : v}`);
+    for (const group of METRIC_GROUPS) {
+      const rows = group.metrics.filter((m) => v[m.id] !== undefined);
+      if (rows.length === 0) continue;
+      lines.push(`● ${group.label}（出どころ: ${SOURCE_LABEL[group.source]}）`);
+      for (const m of rows) lines.push(`  - ${m.label}（${m.unit}）: ${v[m.id].toLocaleString("ja-JP")}`);
+    }
+    // 定義に無い項目（以前のデータなど）
+    const known = new Set(METRIC_GROUPS.flatMap((g) => g.metrics.map((m) => m.id)));
+    const others = Object.keys(v).filter((id) => !known.has(id));
+    if (others.length > 0) {
+      lines.push("● その他");
+      for (const id of others) lines.push(`  - ${metricLabel(id)}: ${v[id].toLocaleString("ja-JP")}`);
+    }
+    const bookings = totalBookings(v);
+    if (bookings !== undefined) lines.push(`● 見学・体験予約数の合計: ${bookings.toLocaleString("ja-JP")} 件（実来館数とは別の数字）`);
   }
+
+  // ---- 検索キーワード ----
+  if (input.keywords.length > 0) {
+    lines.push("", "【重要検索キーワード（Google Search Console）】");
+    for (const k of input.keywords) {
+      const parts = [
+        k.impressions !== null ? `表示 ${k.impressions.toLocaleString("ja-JP")}` : "表示 データなし",
+        k.clicks !== null ? `クリック ${k.clicks.toLocaleString("ja-JP")}` : "クリック データなし",
+        k.ctr !== null ? `CTR ${k.ctr}%` : "CTR データなし",
+        k.position !== null ? `平均掲載順位 ${k.position}` : "順位 データなし",
+      ];
+      lines.push(`- ${k.keyword}: ${parts.join(" / ")}`);
+    }
+  }
+
+  // ---- 自動計算した KPI ----
+  const calculated = kpis.filter((k) => k.value !== null);
+  const uncalculated = kpis.filter((k) => k.value === null);
+  if (calculated.length > 0) {
+    lines.push("", "【自動計算した KPI（システムが計算した値。この数字を使うこと）】");
+    for (const k of calculated) lines.push(`- ${k.label}: ${k.value}${k.unit}（計算式: ${k.formula}）`);
+  }
+  if (uncalculated.length > 0) {
+    lines.push("", "【計算できなかった KPI（データ不足。推測で数字を作らないこと）】");
+    for (const k of uncalculated) lines.push(`- ${k.label}: 計算できません（${k.missing ?? "必要な数字が未入力"}）`);
+  }
+
+  // ---- 前月比較 ----
+  if (comparison && comparison.previousPeriod) {
+    const changed = comparison.rows.filter((r) => r.delta !== null);
+    if (changed.length > 0) {
+      lines.push("", `【前月比較（前月: ${comparison.previousPeriod}）】`);
+      for (const r of changed) {
+        const sign = r.delta! > 0 ? "+" : "";
+        const pctText = r.deltaPct !== null ? `（${sign}${r.deltaPct}%）` : "";
+        const avgText = r.avg3 !== null ? ` / 過去3か月平均 ${r.avg3}` : "";
+        lines.push(`- ${r.label}: ${r.current}${r.unit} ← 前月 ${r.previous}${r.unit} / 増減 ${sign}${r.delta}${pctText}${avgText}`);
+      }
+    }
+  } else if (comparison) {
+    lines.push("", "【前月比較】前月のデータが無いため比較できません。単月の数字だけで判断すること。");
+  }
+
+  // ---- ファネル判定 ----
+  if (funnel) {
+    lines.push("", "【集客ファネルの判定（システムが数字から機械的に判定）】");
+    for (const st of funnel.stages) lines.push(`- ${st.label}: ${FUNNEL_STATUS_JA[st.status]} — ${st.reason}`);
+    if (funnel.weakest) {
+      const w = funnel.stages.find((s) => s.id === funnel.weakest);
+      lines.push(`→ 最も詰まっている可能性が高い段階: ${w?.label ?? funnel.weakest}`);
+    }
+    if (funnel.noDataCount > 0) lines.push(`→ データ不足の段階が ${funnel.noDataCount} 個あります。判断できない段階は「データなし」と書くこと。`);
+  }
+
+  // ---- 自由記述 ----
+  if (Object.keys(input.notes).length > 0) {
+    lines.push("", "【ヒートマップ・行動観察で分かったこと（人が書いた所見）】");
+    for (const [, text] of Object.entries(input.notes)) lines.push(text);
+  }
+
   if (project.input_text) lines.push("", "【相談内容】", project.input_text);
   if (project.extra_text) lines.push("", "【追加データ（貼り付け）】", project.extra_text);
+
+  lines.push(
+    "",
+    "【数字の扱いについての注意】",
+    "- 入力されていない数字は「データなし」とすること。推測して数字を作らない。",
+    "- Search Console のクリック数、GA4 のユーザー数、Google ビジネスプロフィールの Web クリック数は集計方法が違う。同じ数字として扱わない。",
+    "- 上の「自動計算した KPI」以外の率を自分で計算しない。必要なら不足データとして挙げること。",
+  );
   return lines.join("\n");
 }
 
-/**
- * 過去のナレッジを AI に渡す文章にする。
- * 今回の相談と語が重なる記録を先に並べ、上位は施策・KPI・結果・学びまで含めて渡す。
- */
 async function knowledgeContext(repo: Repo, query: string): Promise<string> {
   const rows = await repo.listKnowledge({ limit: 60 });
   if (rows.length === 0) return "【過去のナレッジ】まだありません。";

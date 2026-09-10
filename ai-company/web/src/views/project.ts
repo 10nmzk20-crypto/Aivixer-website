@@ -1,5 +1,5 @@
-import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type RosterEntry, type TaskFull, type Verification } from "../api";
-import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
+import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type RosterEntry, type TaskFull, type Verification } from "../api";
+import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
 /** ③ 案件詳細: 進捗 → 入力 → 分析部 → 経営司令塔 → 最優先施策（成果物・承認・KPI） */
@@ -10,11 +10,11 @@ let analysts: Array<{ id: string; name: string }> | null = null;
 export async function renderProject(main: HTMLElement, params: Record<string, string>) {
   const id = params.id;
   if (!metricLabels || !analysts) {
-    const [{ metrics }, { employees }] = await Promise.all([
-      api.get<{ metrics: Array<{ id: string; label: string; unit: string }> }>("/api/projects/metrics"),
+    const [{ groups }, { employees }] = await Promise.all([
+      api.get<{ groups: MetricGroup[] }>("/api/projects/metrics"),
       api.get<{ employees: Array<{ id: string; name: string; department: string }> }>("/api/employees"),
     ]);
-    metricLabels = Object.fromEntries(metrics.map((m) => [m.id, `${m.label}（${m.unit}）`]));
+    metricLabels = Object.fromEntries(groups.flatMap((g) => g.metrics.map((m) => [m.id, `${m.label}（${m.unit}）`])));
     analysts = employees.filter((e) => e.department === "analysis").map((e) => ({ id: e.id, name: e.name }));
   }
   let lastSig = "";
@@ -44,7 +44,7 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
   const p = b.project;
   const stepIdx = STEPS.indexOf(p.status);
   const stepper = STEPS.map((s, i) => `<div class="stp" data-s="${p.status === "failed" || p.status === "rejected" ? "" : i < stepIdx ? "done" : i === stepIdx ? "active" : ""}"><span class="mk"></span>${esc(PROJECT_STATUS_JA[s])}</div>`).join("");
-  const nums = p.input_data ? Object.entries(p.input_data).map(([k, v]) => `<span>${esc(metricLabels?.[k] ?? k)} <b>${esc(typeof v === "number" ? fmtNum(v) : v)}</b></span>`).join("") : "";
+  const nums = p.input_data ? Object.entries(p.input_data.values).map(([k, v]) => `<span>${esc(metricLabels?.[k] ?? k)} <b>${fmtNum(v)}</b></span>`).join("") : "";
   const selected = p.selected_analysts;
 
   const analysisRows = (analysts ?? []).map((emp, i) => {
@@ -83,6 +83,7 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       <div>${nums ? `<div class="nums">${nums}</div>` : ""}${p.input_text ? `<p class="consult">相談: ${esc(p.input_text)}</p>` : ""}${p.extra_text ? `<details style="margin-top:8px"><summary style="font-size:12px;color:var(--muted);cursor:pointer">追加データを表示</summary><p class="consult">${esc(p.extra_text)}</p></details>` : ""}</div>
       <div style="font-size:12px;color:var(--muted);max-width:280px">${p.selection_reason ? `担当の選定: ${esc(p.selection_reason)}` : ""}</div>
     </div>
+    ${funnelSection(p.funnel, p.derived)}
     <div class="sec"><div class="sec-head"><h2>今回招集された AI 社員 <span>${selected ? `分析 ${b.roster.analysts.length} 名 + 司令塔${b.roster.executors.length ? ` + 実行 ${b.roster.executors.length} 名` : ""}` : "司令塔が招集中"}</span></h2><div class="hint">相談内容に必要な担当だけを招集し、他の社員は動かしません</div></div>
       <div class="roster">${rosterChips(b.roster.analysts, "分析部", "analysis")}${rosterChips([b.roster.commander], "司令塔", "command")}${rosterChips(b.roster.executors, "実行部", "execution")}</div></div>
     <div class="sec"><div class="sec-head"><h2>分析部の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
@@ -108,6 +109,46 @@ function analysisBlock(a: Analysis, no: string, open: boolean): string {
         <div><h4>不足データ</h4>${list(a.missing_data)}</div>
         <div class="span2"><h4>推奨アクション（最大 3）</h4>${a.actions.length ? `<ol>${a.actions.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : '<p class="none">なし</p>'}</div>
       </div></div></details>`;
+}
+
+/** 集客ファネルの判定（コードが数字から機械的に計算した結果）と、自動計算 KPI・前月比 */
+function funnelSection(funnel: Funnel | null, derived: { kpis: DerivedKpi[]; comparison: Comparison } | null): string {
+  if (!funnel && !derived) return "";
+  const stages = funnel
+    ? `<div class="funnel">${funnel.stages
+        .map(
+          (st) => `<div class="fstage" data-s="${esc(st.status)}">
+            <div class="fhead"><span class="fname">${esc(st.label)}</span><span class="fstatus">${esc(FUNNEL_STATUS_JA[st.status] ?? st.status)}</span></div>
+            <p class="freason">${esc(st.reason)}</p>
+            <dl class="fmetrics">${st.metrics.map((m) => `<div><dt>${esc(m.label)}</dt><dd>${esc(m.value)}${m.delta ? `<small>${esc(m.delta)}</small>` : ""}</dd></div>`).join("")}</dl>
+          </div>`,
+        )
+        .join("")}</div>`
+    : "";
+  const weak = funnel?.weakest ? funnel.stages.find((s) => s.id === funnel.weakest) : null;
+
+  const kpis = derived?.kpis ?? [];
+  const calculated = kpis.filter((k) => k.value !== null);
+  const uncalculated = kpis.filter((k) => k.value === null);
+  const cmp = derived?.comparison;
+  const cmpRow = (id: string) => cmp?.rows.find((r) => r.id === id);
+  const kpiTable = calculated.length
+    ? `<div class="tbl"><table class="kpitbl"><thead><tr><th>KPI</th><th>今月</th><th>前月</th><th>増減</th><th>計算式</th></tr></thead><tbody>${calculated
+        .map((k) => {
+          const r = cmpRow(k.id);
+          const sign = r?.delta != null && r.delta > 0 ? "+" : "";
+          return `<tr><td>${esc(k.label)}</td><td class="v">${k.value}${esc(k.unit)}</td><td class="v">${r?.previous != null ? `${r.previous}${esc(k.unit)}` : "—"}</td><td class="v ${r?.delta != null ? (r.delta > 0 ? "up" : r.delta < 0 ? "down" : "") : ""}">${r?.delta != null ? `${sign}${r.delta}${r.deltaPct != null ? `（${sign}${r.deltaPct}%）` : ""}` : "—"}</td><td class="s">${esc(k.formula)}</td></tr>`;
+        })
+        .join("")}</tbody></table></div>`
+    : "";
+  const missing = uncalculated.length
+    ? `<details class="missing"><summary>計算できなかった KPI（${uncalculated.length} 件）</summary><ul>${uncalculated.map((k) => `<li>${esc(k.label)}: ${esc(k.missing ?? "必要な数字が未入力")}</li>`).join("")}</ul></details>`
+    : "";
+
+  return `<div class="sec"><div class="sec-head"><h2>集客ファネルの判定 ${weak ? `<span>最も詰まっている可能性: ${esc(weak.label)}</span>` : ""}</h2><div class="hint">数字から自動判定しています（AI の推測ではありません）${cmp?.previousPeriod ? ` · 前月 ${esc(cmp.previousPeriod)} と比較` : " · 前月データなし"}</div></div>
+    ${stages}
+    ${kpiTable || missing ? `<div class="kpiwrap"><div class="eyebrow">自動計算した KPI</div>${kpiTable}${missing}</div>` : ""}
+  </div>`;
 }
 
 function evidenceTable(evidence: Evidence[]): string {

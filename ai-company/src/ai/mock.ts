@@ -33,13 +33,31 @@ function pick(system: string, user: string): unknown {
   return analysis(name);
 }
 
-/** 相談内容のキーワードで招集する担当を変える（本番では司令塔 AI が判断する） */
+/**
+ * 招集する担当を決める。本番では司令塔 AI が判断するが、
+ * mock でも動きを再現するため、ファネル判定（問題ありの段階）と相談文から機械的に決める。
+ */
 function select(user: string) {
-  // 担当一覧の文字列に反応しないよう、「今回の入力:」より後ろだけを見る
   const t = user.split("今回の入力:")[1] ?? user;
-  if (/Google|検索|流入|MEO|SEO|口コミ/i.test(t)) return { category: "集客", analysts: ["marketing", "web", "competitor"], reason: "検索・Google からの流入に関する相談のため、集客・Web・競合の 3 名を招集しました。（固定回答）" };
+  // ファネル判定に「最も詰まっている段階」があればそれを優先する
+  const weakest = /→ 最も詰まっている可能性が高い段階: (.+)/.exec(t)?.[1]?.trim();
+  const byStage: Record<string, { category: string; analysts: string[] }> = {
+    "Google 検索": { category: "集客（検索）", analysts: ["marketing", "web", "competitor"] },
+    "Google ビジネスプロフィール": { category: "集客（MEO）", analysts: ["marketing", "web", "competitor"] },
+    "HP 流入": { category: "集客（HP 流入）", analysts: ["web", "marketing", "data"] },
+    "HP 内行動": { category: "HP 内の導線", analysts: ["web", "marketing", "data"] },
+    "見学予約": { category: "見学予約", analysts: ["sales", "marketing", "customer"] },
+    実来館: { category: "実来館", analysts: ["sales", "customer", "data"] },
+    "30日お試し": { category: "入会導線", analysts: ["sales", "customer", "product"] },
+    本入会: { category: "入会導線", analysts: ["sales", "customer", "product"] },
+  };
+  if (weakest && byStage[weakest]) {
+    const hit = byStage[weakest];
+    return { ...hit, reason: `ファネル判定で「${weakest}」が最も詰まっているため、その段階を見る 3 名を招集しました。（固定回答）` };
+  }
   if (/利益|固定費|人件費|コスト|経費/.test(t)) return { category: "収益", analysts: ["data", "profit", "product"], reason: "売上と利益の差に関する相談のため、全体数値・収益・商品構成の 3 名を招集しました。（固定回答）" };
   if (/退会|休眠|来館/.test(t) && !/見学|お試し/.test(t)) return { category: "継続", analysts: ["customer", "data", "product"], reason: "退会・継続に関する相談のため、継続・全体数値・商品構成の 3 名を招集しました。（固定回答）" };
+  if (/Google|検索|流入|MEO|SEO|口コミ/i.test(t)) return { category: "集客", analysts: ["marketing", "web", "competitor"], reason: "検索・Google からの流入に関する相談のため、集客・Web・競合の 3 名を招集しました。（固定回答）" };
   return { category: "入会導線", analysts: ["data", "sales", "customer"], reason: "見学から 30 日お試しへの転換に関する相談のため、全体数値・入会導線・継続の 3 名を招集しました。（固定回答）" };
 }
 

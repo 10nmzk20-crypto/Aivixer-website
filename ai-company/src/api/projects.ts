@@ -2,7 +2,10 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { Repo, type ProjectRow } from "../db/repo";
 import { EMPLOYEES } from "../employees/roster";
-import { METRICS } from "../workflows/agents";
+import { METRIC_GROUPS, NOTE_FIELDS, normalizeInputData } from "../metrics";
+import { computeDerived, withKeywordCtr } from "../analysis/derived";
+import { compare, toPeriodKey, type HistoryEntry } from "../analysis/compare";
+import { diagnoseFunnel } from "../analysis/funnel";
 
 /** 案件（1 回の「分析開始」）の作成・取得 */
 export function projectRoutes() {
@@ -21,7 +24,8 @@ export function projectRoutes() {
     return c.json({ projects: withTasks });
   });
 
-  r.get("/projects/metrics", (c) => c.json({ metrics: METRICS }));
+  /** 入力画面の項目定義（ブロック分け・自由記述欄） */
+  r.get("/projects/metrics", (c) => c.json({ groups: METRIC_GROUPS, notes: NOTE_FIELDS }));
 
   r.post("/projects", async (c) => {
     const repo = new Repo(c.env.DB);
@@ -29,14 +33,15 @@ export function projectRoutes() {
       title?: string;
       period_label?: string;
       input_text?: string;
-      input_data?: Record<string, string | number | null>;
+      input_data?: unknown;
       extra_text?: string;
       analyst_mode?: "auto" | "all";
     }>();
 
     const inputText = (body.input_text ?? "").trim();
-    const data = cleanData(body.input_data ?? {});
-    if (!inputText && Object.keys(data).length === 0) {
+    const input = normalizeInputData(body.input_data);
+    input.keywords = withKeywordCtr(input.keywords).slice(0, 30);
+    if (!inputText && Object.keys(input.values).length === 0 && input.keywords.length === 0 && Object.keys(input.notes).length === 0) {
       return c.json({ error: "empty_input", message: "数字か相談内容のどちらかを入力してください。" }, 400);
     }
     if (await repo.hasRunningAnalysis()) {
@@ -45,14 +50,26 @@ export function projectRoutes() {
     }
 
     const period = (body.period_label ?? "").trim() || null;
+    const periodKey = toPeriodKey(period);
     const title = (body.title ?? "").trim() || (period ? `${period} の分析` : inputText.slice(0, 30) || "経営データの分析");
+
+    // 前月・過去平均との比較と、ファネル判定はここで計算して保存する（AI には計算させない）
+    const history: HistoryEntry[] = periodKey
+      ? (await repo.listProjectsBefore(periodKey, 6)).map((p) => ({ periodKey: p.period_key!, input: normalizeInputData(p.input_data_json ? JSON.parse(p.input_data_json) : null) }))
+      : [];
+    const comparison = compare(input, periodKey, history);
+    const funnel = diagnoseFunnel(input, comparison);
+
     const project = await repo.createProject({
       title,
       period_label: period,
+      period_key: periodKey,
       input_text: inputText,
-      input_data: Object.keys(data).length ? data : null,
+      input_data: input,
       extra_text: (body.extra_text ?? "").trim() || null,
       analyst_mode: body.analyst_mode === "all" ? "all" : "auto",
+      derived: { kpis: computeDerived(input), comparison },
+      funnel,
     });
 
     const instance = await c.env.ANALYSIS_PIPELINE.create({ params: { projectId: project.id } });
@@ -71,8 +88,10 @@ export function projectRoutes() {
     return c.json({
       project: {
         ...project,
-        input_data: project.input_data_json ? JSON.parse(project.input_data_json) : null,
+        input_data: project.input_data_json ? normalizeInputData(JSON.parse(project.input_data_json)) : null,
         selected_analysts: project.selected_analysts_json ? JSON.parse(project.selected_analysts_json) : null,
+        derived: project.derived_json ? JSON.parse(project.derived_json) : null,
+        funnel: project.funnel_json ? JSON.parse(project.funnel_json) : null,
       },
       analyses: analyses.map((a) => ({
         ...a,
@@ -171,13 +190,3 @@ async function syncWithWorkflow(env: Env, repo: Repo, project: ProjectRow): Prom
   return (await repo.getProject(project.id)) ?? project;
 }
 
-function cleanData(input: Record<string, string | number | null>): Record<string, string | number> {
-  const out: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(input)) {
-    if (v === null || v === undefined) continue;
-    const s = typeof v === "number" ? String(v) : String(v).trim();
-    if (!s) continue;
-    out[k.slice(0, 40)] = typeof v === "number" ? v : s.slice(0, 200);
-  }
-  return out;
-}

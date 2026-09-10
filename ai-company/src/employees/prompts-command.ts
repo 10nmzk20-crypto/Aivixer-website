@@ -11,6 +11,14 @@ export const COMMANDER_PROMPTS = {
 - 「退会が増えている」→ customer（顧客・継続分析）, data（データ分析）, product（商品・料金分析）
 - 数字だけで相談が無い → data, sales, customer
 
+集客ファネルの判定が付いている場合は、「問題あり」と判定された段階から招集先を決める:
+- Google 検索 / Google ビジネスプロフィール が問題 → marketing, web, competitor
+- HP 流入 / HP 内行動 が問題 → web, marketing, growth（集客実行担当は分析部ではないので、代わりに data を足してよい）
+- 見学予約 / 実来館 が問題 → sales, marketing, customer
+- 30日お試し / 本入会 が問題 → sales, customer, product
+- 料金が原因と思われる相談 → product を必ず加える
+複数の段階が問題なら、ファネルの上流（Google 検索側）を優先して 2〜4 名に収める。
+
 category に分類名、analysts に id、reason に選んだ理由（1〜2 文）を書く。`,
 
   /** Step 3: 分析結果を統合し、最優先施策を決める */

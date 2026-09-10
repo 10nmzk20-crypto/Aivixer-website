@@ -49,7 +49,8 @@ export interface Analysis { id: string; employee_id: string; employee_name: stri
 export interface Decision { id: string; version: number; top_issue: string; reasoning_md: string; evidence: Evidence[]; needed_data: string[]; not_now: Array<{ item: string; reason: string }>; created_at: string }
 export interface RosterEntry { id: string; name: string }
 export interface Project {
-  id: string; title: string; period_label: string | null; input_text: string; input_data: Record<string, string | number> | null; extra_text: string | null; analyst_mode: string;
+  id: string; title: string; period_label: string | null; period_key: string | null; input_text: string; input_data: NormalizedInput | null; extra_text: string | null; analyst_mode: string;
+  derived: { kpis: DerivedKpi[]; comparison: Comparison } | null; funnel: Funnel | null;
   selected_analysts: string[] | null; selection_reason: string | null; status: string; error: string | null; created_at: string; updated_at: string;
 }
 export interface ProjectBundle { project: Project; analyses: Analysis[]; decision: Decision | null; tasks: TaskFull[]; roster: { analysts: RosterEntry[]; commander: RosterEntry; executors: RosterEntry[] } }
@@ -70,4 +71,14 @@ export interface KnowledgeData {
   achievement?: string | null; result?: string; outcome?: string; lesson?: string | null; next_time?: string | null; other_factors?: string | null; reason?: string | null; date?: string;
 }
 export interface Knowledge { id: string; kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome: string | null; data: KnowledgeData | null; created_at: string }
-export interface Metric { id: string; label: string; unit: string }
+export interface Metric { id: string; label: string; unit: string; source: string; hint?: string }
+export interface MetricGroup { id: string; label: string; description: string; source: string; open: boolean; metrics: Metric[] }
+export interface NoteField { id: string; label: string; placeholder: string; group: string }
+export interface KeywordRow { keyword: string; impressions: number | null; clicks: number | null; ctr: number | null; position: number | null }
+export interface NormalizedInput { values: Record<string, number>; keywords: KeywordRow[]; notes: Record<string, string> }
+export interface DerivedKpi { id: string; label: string; value: number | null; unit: string; formula: string; missing?: string; group: "google" | "hp" | "sales" | "member" }
+export interface ComparisonRow { id: string; label: string; unit: string; current: number | null; previous: number | null; delta: number | null; deltaPct: number | null; avg3: number | null; avg6: number | null; kind: "input" | "derived" }
+export interface Comparison { previousPeriod: string | null; rows: ComparisonRow[] }
+export type FunnelStatus = "good" | "watch" | "problem" | "no_data";
+export interface FunnelStage { id: string; label: string; status: FunnelStatus; reason: string; metrics: Array<{ label: string; value: string; delta?: string }>; severity: number }
+export interface Funnel { stages: FunnelStage[]; weakest: string | null; noDataCount: number }

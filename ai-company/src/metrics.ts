@@ -1,0 +1,225 @@
+/**
+ * 「新しい分析」で入力する項目の定義。
+ *
+ * ViXer の集客導線に合わせて 7 つのブロックに分けている:
+ *   Google 検索・マップ・その他認知 → ホームページ → 見学・体験予約 → 実際の見学・体験
+ *   → 30 日お試し または 本入会 → 30 日お試しから本入会
+ *
+ * `source` は「どの計測ツールの数字か」。集計方法が違う数字を同じものとして扱わないために使い、
+ * 将来 API 連携するときの取り込み先にもなる。
+ */
+
+export type MetricSource = "manual" | "gbp" | "gsc" | "ga4" | "clarity" | "internal";
+
+export interface MetricDef {
+  id: string;
+  label: string;
+  unit: string;
+  source: MetricSource;
+  /** 入力欄の下に出す補足 */
+  hint?: string;
+}
+
+export interface MetricGroupDef {
+  id: string;
+  label: string;
+  /** このブロックが導線のどこを見ているか */
+  description: string;
+  source: MetricSource;
+  /** 最初から開いておくか（基本項目だけ true） */
+  open: boolean;
+  metrics: MetricDef[];
+}
+
+/** ① 基本（最初に開いているブロック） */
+const BASIC: MetricDef[] = [
+  { id: "visits", label: "実際の見学・体験人数", unit: "名", source: "internal", hint: "予約数ではなく、実際に来た人数" },
+  { id: "trials", label: "30日お試し 開始人数", unit: "名", source: "internal" },
+  { id: "direct_joins", label: "見学から直接 本入会", unit: "名", source: "internal" },
+  { id: "trial_joins", label: "30日お試しから 本入会", unit: "名", source: "internal" },
+  { id: "new_members", label: "新規入会者数（合計）", unit: "名", source: "internal" },
+  { id: "churn", label: "退会者数", unit: "名", source: "internal" },
+  { id: "members", label: "月末会員数", unit: "名", source: "internal" },
+  { id: "sales", label: "売上", unit: "円", source: "internal" },
+];
+
+/** ② Google ビジネスプロフィール */
+const GBP: MetricDef[] = [
+  { id: "gbp_impressions", label: "プロフィール表示回数（合計）", unit: "回", source: "gbp" },
+  { id: "gbp_impressions_search", label: "Google 検索での表示回数", unit: "回", source: "gbp" },
+  { id: "gbp_impressions_maps", label: "Google マップでの表示回数", unit: "回", source: "gbp" },
+  { id: "gbp_website_clicks", label: "Web サイトクリック数", unit: "回", source: "gbp" },
+  { id: "gbp_calls", label: "電話件数", unit: "件", source: "gbp" },
+  { id: "gbp_directions", label: "ルート検索数", unit: "回", source: "gbp" },
+  { id: "gbp_reviews_total", label: "口コミ件数（累計）", unit: "件", source: "gbp" },
+  { id: "gbp_rating", label: "口コミ平均評価", unit: "点", source: "gbp" },
+  { id: "gbp_reviews_new", label: "当月の新規口コミ数", unit: "件", source: "gbp" },
+];
+
+/** ③ Google Search Console */
+const GSC: MetricDef[] = [
+  { id: "gsc_impressions", label: "検索表示回数", unit: "回", source: "gsc" },
+  { id: "gsc_clicks", label: "検索クリック数", unit: "回", source: "gsc" },
+  { id: "gsc_ctr", label: "検索 CTR", unit: "%", source: "gsc", hint: "空欄なら表示回数とクリック数から計算します" },
+  { id: "gsc_position", label: "平均掲載順位", unit: "位", source: "gsc" },
+];
+
+/** ④ Google Analytics 4 */
+const GA4: MetricDef[] = [
+  { id: "ga4_users", label: "ユーザー数", unit: "人", source: "ga4" },
+  { id: "ga4_sessions", label: "セッション数", unit: "回", source: "ga4" },
+  { id: "ga4_new_users", label: "新規ユーザー数", unit: "人", source: "ga4" },
+  { id: "ga4_organic_users", label: "Google 自然検索からのユーザー数", unit: "人", source: "ga4" },
+  { id: "ga4_maps_users", label: "Google マップ等からの流入数", unit: "人", source: "ga4", hint: "分かる場合のみ" },
+  { id: "ga4_pv_top", label: "トップページ閲覧数", unit: "回", source: "ga4" },
+  { id: "ga4_pv_price", label: "料金ページ閲覧数", unit: "回", source: "ga4" },
+  { id: "ga4_pv_trial", label: "見学・体験ページ閲覧数", unit: "回", source: "ga4" },
+  { id: "ga4_cta_trial", label: "見学・体験 CTA クリック数", unit: "回", source: "ga4" },
+  { id: "ga4_cta_line", label: "LINE クリック数", unit: "回", source: "ga4" },
+  { id: "ga4_cta_tel", label: "電話クリック数", unit: "回", source: "ga4" },
+  { id: "ga4_booking_page", label: "Web 予約ページへの遷移数", unit: "回", source: "ga4" },
+];
+
+/** ⑤ ヒートマップ・行動分析（Microsoft Clarity など） */
+const CLARITY: MetricDef[] = [
+  { id: "clarity_scroll", label: "平均スクロール率", unit: "%", source: "clarity" },
+  { id: "clarity_cta_reach", label: "CTA 到達率", unit: "%", source: "clarity" },
+  { id: "clarity_cta_clicks", label: "主要 CTA クリック数", unit: "回", source: "clarity" },
+  { id: "clarity_dead_clicks", label: "デッドクリック数", unit: "回", source: "clarity" },
+  { id: "clarity_rage_clicks", label: "レイジクリック数", unit: "回", source: "clarity" },
+];
+
+/** ⑥ 見学・体験予約（予約数と実来館数を必ず分ける） */
+const BOOKING: MetricDef[] = [
+  { id: "inquiries", label: "問い合わせ数（合計）", unit: "件", source: "internal" },
+  { id: "book_web", label: "Web からの見学・体験予約数", unit: "件", source: "internal" },
+  { id: "book_tel", label: "電話からの見学・体験予約数", unit: "件", source: "internal" },
+  { id: "book_line", label: "LINE からの見学・体験予約数", unit: "件", source: "internal" },
+  { id: "book_other", label: "紹介等その他からの予約数", unit: "件", source: "internal" },
+];
+
+/** ⑦ 認知経路（見学・体験者に聞いた「何で知りましたか」） */
+const AWARENESS: MetricDef[] = [
+  { id: "aw_google_search", label: "Google 検索", unit: "名", source: "internal" },
+  { id: "aw_google_maps", label: "Google マップ", unit: "名", source: "internal" },
+  { id: "aw_billboard", label: "大型ビジョン", unit: "名", source: "internal" },
+  { id: "aw_referral", label: "紹介", unit: "名", source: "internal" },
+  { id: "aw_instagram", label: "Instagram", unit: "名", source: "internal" },
+  { id: "aw_sns_other", label: "その他 SNS", unit: "名", source: "internal" },
+  { id: "aw_passerby", label: "通りがかり", unit: "名", source: "internal" },
+  { id: "aw_other", label: "その他", unit: "名", source: "internal" },
+  { id: "aw_unknown", label: "不明", unit: "名", source: "internal" },
+];
+
+export const METRIC_GROUPS: MetricGroupDef[] = [
+  { id: "basic", label: "基本（見学・入会・会員）", description: "実際の見学・体験から入会・退会まで。ここだけでも分析できます。", source: "internal", open: true, metrics: BASIC },
+  { id: "booking", label: "見学・体験予約", description: "予約が入った経路と件数。実来館数（基本）と比べて来館率を出します。", source: "internal", open: false, metrics: BOOKING },
+  { id: "gbp", label: "Google ビジネスプロフィール", description: "Google 検索・マップでの見え方と、そこからの行動。", source: "gbp", open: false, metrics: GBP },
+  { id: "gsc", label: "Google Search Console", description: "ホームページが Google 検索でどれくらい見つかっているか。", source: "gsc", open: false, metrics: GSC },
+  { id: "ga4", label: "Google Analytics 4", description: "ホームページに来た人が何をしたか。", source: "ga4", open: false, metrics: GA4 },
+  { id: "clarity", label: "ヒートマップ・行動分析", description: "ページのどこまで読まれ、どこが押されているか。", source: "clarity", open: false, metrics: CLARITY },
+  { id: "awareness", label: "認知経路（何で知りましたか）", description: "見学・体験に来た人に聞いた集計。合計が見学人数と一致しなくても構いません。", source: "internal", open: false, metrics: AWARENESS },
+];
+
+/** 全項目を平らにした一覧（id で引くため） */
+export const ALL_METRICS: MetricDef[] = METRIC_GROUPS.flatMap((g) => g.metrics);
+export const METRIC_MAP: Record<string, MetricDef> = Object.fromEntries(ALL_METRICS.map((m) => [m.id, m]));
+export const METRIC_GROUP_OF: Record<string, string> = Object.fromEntries(METRIC_GROUPS.flatMap((g) => g.metrics.map((m) => [m.id, g.id])));
+
+/** 計測ツールの表示名。集計方法が違うことを AI に伝えるために使う */
+export const SOURCE_LABEL: Record<MetricSource, string> = {
+  manual: "手入力",
+  gbp: "Google ビジネスプロフィール",
+  gsc: "Google Search Console",
+  ga4: "Google Analytics 4",
+  clarity: "ヒートマップ（Clarity 等）",
+  internal: "店舗の実績記録",
+};
+
+/** 検索キーワードごとの数字（何個でも追加できる） */
+export interface KeywordRow {
+  keyword: string;
+  impressions: number | null;
+  clicks: number | null;
+  ctr: number | null;
+  position: number | null;
+}
+
+/** 以前の平らな形式で使っていた項目名 → 今の項目名。既存データを読むために使う */
+const LEGACY_ALIAS: Record<string, string> = {
+  conversions: "trial_joins", // 「本入会（お試し経由）」
+  web_bookings: "book_web", // 「HP からの見学予約」
+  reviews: "gbp_reviews_new", // 「Google 口コミ数」
+};
+
+/** 入力欄に出さないが、以前のデータには入っている項目 */
+const LEGACY_ONLY: Record<string, { label: string; unit: string }> = {
+  personal_users: { label: "パーソナル利用者", unit: "名" },
+  avg_visits: { label: "平均来館回数（月）", unit: "回" },
+};
+
+export interface NormalizedInput {
+  /** 項目 id → 数値。空欄は入らない */
+  values: Record<string, number>;
+  /** 検索キーワードごとの数字 */
+  keywords: KeywordRow[];
+  /** ヒートマップで分かったことなどの自由記述 */
+  notes: Record<string, string>;
+}
+
+/**
+ * 保存された input_data_json を今の形に揃える。
+ * 古い平らな形式（{visits: 31}）も、新しいブロック形式（{values: {...}, keywords: [...]}）も読める。
+ */
+export function normalizeInputData(raw: unknown): NormalizedInput {
+  const out: NormalizedInput = { values: {}, keywords: [], notes: {} };
+  if (!raw || typeof raw !== "object") return out;
+  const obj = raw as Record<string, unknown>;
+
+  const source = obj.values && typeof obj.values === "object" ? (obj.values as Record<string, unknown>) : obj;
+  for (const [k, v] of Object.entries(source)) {
+    if (k === "keywords" || k === "notes" || k === "values") continue;
+    const n = typeof v === "number" ? v : Number(String(v).replace(/[,，\s]/g, ""));
+    if (!Number.isFinite(n)) continue;
+    out.values[LEGACY_ALIAS[k] ?? k] = n;
+  }
+
+  if (Array.isArray(obj.keywords)) {
+    for (const row of obj.keywords as Array<Record<string, unknown>>) {
+      const keyword = String(row?.keyword ?? "").trim();
+      if (!keyword) continue;
+      const num = (x: unknown) => {
+        const n = typeof x === "number" ? x : Number(String(x ?? "").replace(/[,，\s%]/g, ""));
+        return Number.isFinite(n) ? n : null;
+      };
+      out.keywords.push({ keyword: keyword.slice(0, 60), impressions: num(row.impressions), clicks: num(row.clicks), ctr: num(row.ctr), position: num(row.position) });
+    }
+  }
+
+  if (obj.notes && typeof obj.notes === "object") {
+    for (const [k, v] of Object.entries(obj.notes as Record<string, unknown>)) {
+      const s = String(v ?? "").trim();
+      if (s) out.notes[k.slice(0, 40)] = s.slice(0, 4000);
+    }
+  }
+  return out;
+}
+
+/** 項目 id の表示名（単位つき）。以前だけの項目にも対応する */
+export function metricLabel(id: string): string {
+  const m = METRIC_MAP[id];
+  if (m) return `${m.label}（${m.unit}）`;
+  const legacy = LEGACY_ONLY[id];
+  if (legacy) return `${legacy.label}（${legacy.unit}）`;
+  return id;
+}
+
+/** 自由記述の欄 */
+export const NOTE_FIELDS: Array<{ id: string; label: string; placeholder: string; group: string }> = [
+  {
+    id: "heatmap",
+    label: "ヒートマップで分かったこと",
+    placeholder: "例: 料金ページまで見ている人が多い / トップページの途中で離脱が多い / 見学 CTA までスクロールされていない / LINE ボタンはほとんど押されていない",
+    group: "clarity",
+  },
+];

@@ -5,7 +5,9 @@ export interface EmployeeRow { id: string; name: string; department: string; rol
 export interface ProjectRow {
   id: string; title: string; period_label: string | null; input_text: string; input_data_json: string | null; extra_text: string | null;
   analyst_mode: string; selected_analysts_json: string | null; selection_reason: string | null; status: string;
-  workflow_instance_id: string | null; error: string | null; created_at: string; updated_at: string;
+  workflow_instance_id: string | null; error: string | null;
+  period_key: string | null; derived_json: string | null; funnel_json: string | null;
+  created_at: string; updated_at: string;
 }
 export interface AnalysisRow {
   id: string; project_id: string; employee_id: string; status: string; headline: string | null; facts_json: string | null; hypotheses_json: string | null;
@@ -56,12 +58,12 @@ export class Repo {
   }
 
   // ---------- 案件 ----------
-  async createProject(input: { title: string; period_label: string | null; input_text: string; input_data: unknown; extra_text: string | null; analyst_mode: string }): Promise<ProjectRow> {
+  async createProject(input: { title: string; period_label: string | null; period_key: string | null; input_text: string; input_data: unknown; extra_text: string | null; analyst_mode: string; derived: unknown; funnel: unknown }): Promise<ProjectRow> {
     const id = newId();
     const t = now();
     await this.db
-      .prepare("INSERT INTO projects (id, title, period_label, input_text, input_data_json, extra_text, analyst_mode, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'analyzing', ?, ?)")
-      .bind(id, input.title, input.period_label, input.input_text, input.input_data == null ? null : json(input.input_data), input.extra_text, input.analyst_mode, t, t)
+      .prepare("INSERT INTO projects (id, title, period_label, period_key, input_text, input_data_json, extra_text, analyst_mode, derived_json, funnel_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'analyzing', ?, ?)")
+      .bind(id, input.title, input.period_label, input.period_key, input.input_text, input.input_data == null ? null : json(input.input_data), input.extra_text, input.analyst_mode, json(input.derived), json(input.funnel), t, t)
       .run();
     return (await this.getProject(id))!;
   }
@@ -88,6 +90,15 @@ export class Repo {
     const r = await this.db.prepare("SELECT COUNT(*) AS n FROM projects WHERE status = 'analyzing'").first<{ n: number }>();
     return (r?.n ?? 0) > 0;
   }
+  /** 前月比較のため、指定の対象月より前の案件を新しい順に取る */
+  async listProjectsBefore(periodKey: string, limit = 6): Promise<ProjectRow[]> {
+    const r = await this.db
+      .prepare("SELECT * FROM projects WHERE period_key IS NOT NULL AND period_key < ? ORDER BY period_key DESC LIMIT ?")
+      .bind(periodKey, limit)
+      .all<ProjectRow>();
+    return r.results;
+  }
+
   async latestDecidedProject(): Promise<ProjectRow | null> {
     return (await this.db.prepare("SELECT * FROM projects WHERE status NOT IN ('analyzing','failed') ORDER BY created_at DESC LIMIT 1").first<ProjectRow>()) ?? null;
   }
