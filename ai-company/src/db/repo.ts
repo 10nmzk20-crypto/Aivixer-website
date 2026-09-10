@@ -9,15 +9,16 @@ export interface ProjectRow {
 }
 export interface AnalysisRow {
   id: string; project_id: string; employee_id: string; status: string; headline: string | null; facts_json: string | null; hypotheses_json: string | null;
-  evidence_json: string | null; needed_data_json: string | null; findings_md: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
+  evidence_json: string | null; needed_data_json: string | null; actions_json: string | null; findings_md: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 export interface DecisionRow {
-  id: string; project_id: string; version: number; summary_md: string; facts_json: string; hypotheses_json: string; evidence_json: string | null; needed_data_json: string; not_now_json: string;
+  id: string; project_id: string; version: number; summary_md: string; top_issue: string | null; reasoning_md: string | null; facts_json: string; hypotheses_json: string; evidence_json: string | null; needed_data_json: string; not_now_json: string;
   model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 export interface TaskRow {
   id: string; project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
-  executor_employee_id: string; assignment_reason: string; restricted_actions_json: string; status: string; due_date: string | null; created_at: string; updated_at: string;
+  executor_employee_id: string; assignment_reason: string; restricted_actions_json: string; status: string; due_date: string | null;
+  what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null; created_at: string; updated_at: string;
 }
 export interface OutputRow {
   id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null;
@@ -31,7 +32,7 @@ export interface KpiRow {
 export interface KnowledgeRow { id: string; kind: string; title: string; body_md: string; tags_json: string; source_type: string | null; source_id: string | null; created_at: string }
 
 export const PROJECT_STATUSES = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
-export const TASK_STATUSES = ["candidate", "awaiting_approval", "revising", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
+export const TASK_STATUSES = ["candidate", "awaiting_approval", "revising", "in_progress", "awaiting_verification", "verifying", "completed", "rejected", "failed"] as const;
 
 export const now = () => new Date().toISOString();
 export const newId = () => crypto.randomUUID();
@@ -93,10 +94,10 @@ export class Repo {
       .bind(newId(), projectId, employeeId, now())
       .run();
   }
-  async completeAnalysis(projectId: string, employeeId: string, d: { headline: string; facts: string[]; hypotheses: string[]; evidence: unknown[]; needed_data: string[]; findings_md: string; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
+  async completeAnalysis(projectId: string, employeeId: string, d: { conclusion: string; facts: string[]; hypotheses: unknown[]; evidence: unknown[]; missing_data: string[]; actions: string[]; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
     await this.db
-      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, evidence_json = ?, needed_data_json = ?, findings_md = ?, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
-      .bind(d.headline, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.needed_data), d.findings_md, d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
+      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, evidence_json = ?, needed_data_json = ?, actions_json = ?, findings_md = NULL, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
+      .bind(d.conclusion, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.missing_data), json(d.actions), d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
       .run();
   }
   async failAnalysis(projectId: string, employeeId: string, message: string): Promise<void> {
@@ -118,13 +119,13 @@ export class Repo {
   }
 
   // ---------- 司令塔の判断 ----------
-  async createDecision(projectId: string, d: { summary_md: string; facts: string[]; hypotheses: string[]; evidence: unknown[]; needed_data: string[]; not_now: unknown[]; model: string; input_tokens: number; output_tokens: number }): Promise<DecisionRow> {
+  async createDecision(projectId: string, d: { top_issue: string; reasoning: string; evidence: unknown[]; needed_data: string[]; not_now: unknown[]; model: string; input_tokens: number; output_tokens: number }): Promise<DecisionRow> {
     const prev = await this.db.prepare("SELECT MAX(version) AS v FROM decisions WHERE project_id = ?").bind(projectId).first<{ v: number | null }>();
     const version = (prev?.v ?? 0) + 1;
     const id = newId();
     await this.db
-      .prepare("INSERT INTO decisions (id, project_id, version, summary_md, facts_json, hypotheses_json, evidence_json, needed_data_json, not_now_json, model, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, projectId, version, d.summary_md, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.needed_data), json(d.not_now), d.model, d.input_tokens, d.output_tokens, now())
+      .prepare("INSERT INTO decisions (id, project_id, version, summary_md, top_issue, reasoning_md, facts_json, hypotheses_json, evidence_json, needed_data_json, not_now_json, model, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, '[]', '[]', ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, projectId, version, d.top_issue, d.top_issue, d.reasoning, json(d.evidence), json(d.needed_data), json(d.not_now), d.model, d.input_tokens, d.output_tokens, now())
       .run();
     return (await this.db.prepare("SELECT * FROM decisions WHERE id = ?").bind(id).first<DecisionRow>())!;
   }
@@ -133,12 +134,12 @@ export class Repo {
   }
 
   // ---------- 施策（タスク） ----------
-  async createTask(d: { project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number; executor_employee_id: string; assignment_reason: string; restricted_actions: string[]; due_date: string | null }): Promise<TaskRow> {
+  async createTask(d: { project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number; executor_employee_id: string; assignment_reason: string; restricted_actions: string[]; due_date: string | null; what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null }): Promise<TaskRow> {
     const id = newId();
     const t = now();
     await this.db
-      .prepare("INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?)")
-      .bind(id, d.project_id, d.decision_id, d.rank, d.title, d.objective, d.reasoning, d.impact_score, d.effort_hours, d.executor_employee_id, d.assignment_reason, json(d.restricted_actions), d.due_date, t, t)
+      .prepare("INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, what_to_do, human_owner, duration_days, difficulty, cost_estimate, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, d.project_id, d.decision_id, d.rank, d.title, d.objective, d.reasoning, d.impact_score, d.effort_hours, d.executor_employee_id, d.assignment_reason, json(d.restricted_actions), d.due_date, d.what_to_do, d.human_owner, d.duration_days, d.difficulty, d.cost_estimate, t, t)
       .run();
     return (await this.getTask(id))!;
   }
@@ -269,7 +270,7 @@ export class Repo {
     else if (s.some((x) => x === "candidate" || x === "failed")) status = "candidates";
     else if (s.some((x) => x === "awaiting_approval" || x === "revising")) status = "awaiting_approval";
     else if (s.some((x) => x === "in_progress")) status = "in_progress";
-    else if (s.some((x) => x === "awaiting_verification")) status = "awaiting_verification";
+    else if (s.some((x) => x === "awaiting_verification" || x === "verifying")) status = "awaiting_verification";
     else if (s.every((x) => x === "rejected")) status = "rejected";
     else status = "completed";
     if (status !== project.status) await this.updateProject(projectId, { status });

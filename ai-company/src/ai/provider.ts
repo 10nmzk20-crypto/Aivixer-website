@@ -42,9 +42,9 @@ export class AiProviderError extends Error {
 }
 
 export function getProvider(env: Env): AiProvider {
-  const name = (env.AI_PROVIDER ?? "anthropic").toLowerCase();
+  const name = providerName(env);
   if (name === "mock") return new MockProvider();
-  if (name === "anthropic") {
+  if (name === "claude") {
     if (!env.ANTHROPIC_API_KEY) {
       throw new AiProviderError("ANTHROPIC_API_KEY が設定されていません。`wrangler secret put ANTHROPIC_API_KEY` で登録してください。", false);
     }
@@ -56,6 +56,13 @@ export function getProvider(env: Env): AiProvider {
     });
   }
   throw new AiProviderError(`未対応の AI_PROVIDER です: ${name}`, false);
+}
+
+/** 設定名を正規化する。`claude` と `anthropic` は同じ意味 */
+export function providerName(env: Env): "mock" | "claude" | string {
+  const raw = (env.AI_PROVIDER ?? "claude").toLowerCase().trim();
+  if (raw === "anthropic" || raw === "claude") return "claude";
+  return raw;
 }
 
 export type AnthropicEffort = "low" | "medium" | "high" | "xhigh" | "max";

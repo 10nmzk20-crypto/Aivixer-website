@@ -66,9 +66,11 @@ setupSheet();
 
 (async () => {
   try {
-    const me = await api.get<{ mode: string; authenticated: boolean }>("/api/auth/me");
+    const me = await api.get<{ mode: string; authenticated: boolean; ai_provider?: string; ai_model?: string }>("/api/auth/me");
     const foot = document.getElementById("side-foot");
-    if (foot) foot.textContent = `Cloudflare Workers · D1 · Workflows\n認証: ${{ access: "Cloudflare Access", password: "共有パスワード", open: "なし（開発）", locked: "未設定" }[me.mode] ?? me.mode}`;
+    const ai = me.ai_provider === "mock" ? "AI: 固定回答モード（mock）— 本番の分析ではありません" : `AI: Claude（${me.ai_model ?? ""}）`;
+    if (foot) foot.textContent = `${ai}\n認証: ${{ access: "Cloudflare Access", password: "共有パスワード", open: "なし（開発）", locked: "未設定" }[me.mode] ?? me.mode}`;
+    if (me.ai_provider === "mock") document.body.dataset.ai = "mock";
   } catch { /* 認証情報の取得に失敗しても画面は出す */ }
   navigate();
 })();

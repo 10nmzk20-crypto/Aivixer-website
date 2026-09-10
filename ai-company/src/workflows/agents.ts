@@ -29,7 +29,8 @@ export const METRICS: Array<{ id: string; label: string; unit: string }> = [
 ];
 const METRIC_LABEL = Object.fromEntries(METRICS.map((m) => [m.id, `${m.label}（${m.unit}）`]));
 
-const MAX_ANALYSTS = 8;
+/** 自動招集の上限。全員を動かさない（司令塔が 2〜4 名を選ぶ） */
+const MAX_ANALYSTS = 4;
 
 function system(employeeId: string, override?: string): string {
   const def = EMPLOYEE_MAP[employeeId];
@@ -91,12 +92,12 @@ export async function selectAnalysts(env: Env, projectId: string): Promise<strin
     try {
       const { data } = await ai.generateJSON({
         system: system("commander", COMMANDER_PROMPTS.select),
-        user: `分析部の一覧:\n${roster}\n\n今回の入力:\n${formatInput(project)}\n\n必要な担当の id を analysts に入れてください。`,
+        user: `分析部の一覧:\n${roster}\n\n今回の入力:\n${formatInput(project)}\n\n相談を分類し、招集する担当（2〜4 名）の id を analysts に入れてください。`,
         schema: SelectAnalystsSchema,
         maxTokens: 1500,
       });
       selected = [...new Set(data.analysts.filter((id) => ANALYST_IDS.includes(id)))].slice(0, MAX_ANALYSTS);
-      reason = data.reason;
+      reason = `分類: ${data.category}。${data.reason}`;
     } catch (err) {
       throw asWorkflowError(err);
     }
@@ -126,13 +127,33 @@ export async function runAnalyst(env: Env, projectId: string, employeeId: string
       user: `${formatInput(project)}\n\n${await knowledgeContext(repo)}\n\nあなたの担当分野の観点で分析してください。`,
       schema: AnalysisSchema,
     });
-    await repo.completeAnalysis(projectId, employeeId, { ...data, model: usage.model, input_tokens: usage.inputTokens, output_tokens: usage.outputTokens });
+    await repo.completeAnalysis(projectId, employeeId, {
+      conclusion: data.conclusion,
+      facts: data.facts,
+      hypotheses: data.hypotheses.slice(0, 3),
+      evidence: data.evidence,
+      missing_data: data.missing_data,
+      actions: data.actions.slice(0, 3),
+      model: usage.model,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+    });
   } catch (err) {
     const e = asWorkflowError(err);
     if (e instanceof NonRetryableError) await repo.failAnalysis(projectId, employeeId, e.message);
     throw e;
   }
   return employeeId;
+}
+
+/** 分析担当 1 人の結果を、司令塔に渡す文章にする */
+export function formatAnalysis(a: { employee_id: string; headline: string | null; facts_json: string | null; hypotheses_json: string | null; evidence_json: string | null; needed_data_json: string | null; actions_json: string | null }): string {
+  const list = (s: string | null) => (JSON.parse(s ?? "[]") as string[]).map((x) => `  - ${x}`).join("\n") || "  - なし";
+  const hyps = (JSON.parse(a.hypotheses_json ?? "[]") as Array<string | { hypothesis: string; rationale: string }>)
+    .map((h) => (typeof h === "string" ? `  - ${h}` : `  - ${h.hypothesis}（根拠: ${h.rationale}）`))
+    .join("\n") || "  - なし";
+  const evidence = (JSON.parse(a.evidence_json ?? "[]") as Array<{ label: string; value: string; source: string }>).map((e) => `  - ${e.label}: ${e.value}（${e.source}）`).join("\n") || "  - なし";
+  return `■ ${employeeName(a.employee_id)}\n【結論】${a.headline}\n【確認できる事実】\n${list(a.facts_json)}\n【仮説と根拠】\n${hyps}\n【根拠となった数字】\n${evidence}\n【不足データ】\n${list(a.needed_data_json)}\n【推奨アクション】\n${list(a.actions_json)}`;
 }
 
 // ---------- Step 3: 司令塔が統合し、最優先施策を決める ----------
@@ -145,13 +166,7 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
 
   const analyses = (await repo.listAnalyses(projectId)).filter((a) => a.status === "done");
   if (analyses.length === 0) throw new NonRetryableError("分析結果がひとつも得られませんでした。");
-  const report = analyses
-    .map((a) => {
-      const list = (s: string | null) => (JSON.parse(s ?? "[]") as string[]).map((x) => `  - ${x}`).join("\n");
-      const evidence = (JSON.parse(a.evidence_json ?? "[]") as Array<{ label: string; value: string; source: string }>).map((e) => `  - ${e.label}: ${e.value}（${e.source}）`).join("\n");
-      return `■ ${employeeName(a.employee_id)}: ${a.headline}\n 事実:\n${list(a.facts_json)}\n 仮説:\n${list(a.hypotheses_json)}\n 根拠となった数字:\n${evidence}\n 追加で必要なデータ:\n${list(a.needed_data_json)}\n 所見:\n ${a.findings_md}`;
-    })
-    .join("\n\n");
+  const report = analyses.map((a) => formatAnalysis(a)).join("\n\n");
   const executors = EXECUTOR_IDS.map((id) => `- ${id}: ${EMPLOYEE_MAP[id].name}`).join("\n");
 
   const ai = provider(env);
@@ -167,7 +182,16 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
   }
   const { data, usage } = result;
 
-  const decision = await repo.createDecision(projectId, { ...data, model: usage.model, input_tokens: usage.inputTokens, output_tokens: usage.outputTokens });
+  const decision = await repo.createDecision(projectId, {
+    top_issue: data.top_issue,
+    reasoning: data.reasoning,
+    evidence: data.evidence,
+    needed_data: data.needed_data,
+    not_now: data.not_now,
+    model: usage.model,
+    input_tokens: usage.inputTokens,
+    output_tokens: usage.outputTokens,
+  });
   const ids: string[] = [];
   const proposals = [...data.tasks].sort((a, b) => a.rank - b.rank).slice(0, 3);
   for (const [i, p] of proposals.entries()) {
@@ -178,13 +202,18 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
       rank: i + 1,
       title: p.title,
       objective: p.objective,
-      reasoning: p.reasoning,
+      reasoning: p.priority_reason,
       impact_score: clamp(Math.round(p.impact_score), 1, 5),
       effort_hours: Math.max(0.5, Number(p.effort_hours) || 1),
       executor_employee_id: executor,
       assignment_reason: p.assignment_reason,
-      restricted_actions: detectRestrictedActions(`${p.title}\n${p.objective}\n${p.reasoning}`, p.restricted_actions),
-      due_date: null,
+      restricted_actions: detectRestrictedActions(`${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`, p.restricted_actions),
+      due_date: dueDate(p.duration_days),
+      what_to_do: p.what_to_do,
+      human_owner: p.human_owner,
+      duration_days: clamp(Math.round(p.duration_days), 1, 365),
+      difficulty: clamp(Math.round(p.difficulty), 1, 5),
+      cost_estimate: p.cost_estimate,
     });
     if (p.kpis.length) await repo.replaceKpis(task.id, p.kpis.slice(0, 3), false);
     ids.push(task.id);
@@ -211,8 +240,8 @@ export async function produceOutput(env: Env, taskId: string, revisionNote: stri
 
   const parts = [
     project ? formatInput(project) : "",
-    decision ? `【経営司令塔の判断】\n${decision.summary_md}` : "",
-    `【あなたが担当する施策（優先順位 ${task.rank}）】\n題名: ${task.title}\n目的: ${task.objective}\nなぜ今これか: ${task.reasoning}\n担当理由: ${task.assignment_reason}\nKPI:\n${kpiText}`,
+    decision ? `【経営司令塔の判断】\n最重要課題: ${decision.top_issue ?? decision.summary_md}\n理由: ${decision.reasoning_md ?? ""}` : "",
+    `【あなたが担当する施策（優先順位 ${task.rank}）】\n題名: ${task.title}\n目的: ${task.objective}\n具体的に何をするか: ${task.what_to_do ?? "（未記載）"}\n人間側の担当: ${task.human_owner ?? "代表"}\n期限: ${task.duration_days ?? "未定"} 日\nなぜ今これか: ${task.reasoning}\n担当理由: ${task.assignment_reason}\nKPI:\n${kpiText}`,
   ];
   if (revisionNote && previous) {
     parts.push(`【前回の成果物（v${previous.version}）】\n${previous.content_md}`, `【代表からの修正指示】\n${revisionNote}\n\n修正指示を反映した新しい版を、全文書き直して出してください。`);
@@ -258,3 +287,8 @@ export async function markProjectFailed(env: Env, projectId: string, message: st
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : lo));
+const dueDate = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + clamp(Math.round(days), 1, 365));
+  return d.toISOString().slice(0, 10);
+};

@@ -1,4 +1,4 @@
-import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type TaskFull } from "../api";
+import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type RosterEntry, type TaskFull } from "../api";
 import { esc, fmtDate, fmtNum, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
@@ -59,8 +59,15 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
 
   const d = b.decision;
   const commander = d
-    ? `<div class="cmd"><p class="lead">${esc(d.summary_md)}</p><div class="grid">${fourColumns(d.facts, d.hypotheses, d.evidence, d.needed_data)}</div>
-        <div class="notnow"><h4>今やらなくていいこと</h4><ul>${d.not_now.map((x) => `<li class="nn">${esc(x.item)}<small>${esc(x.reason)}</small></li>`).join("")}</ul></div></div>`
+    ? `<div class="cmd">
+        <h4>今月の最重要課題</h4><p class="lead">${esc(d.top_issue)}</p>
+        <h4>そう判断した理由</h4><p class="reason">${esc(d.reasoning_md)}</p>
+        <div class="grid cols3">
+          <div><h4>根拠となった数字</h4>${evidenceTable(d.evidence)}</div>
+          <div><h4>今はやらないこと</h4><ul>${d.not_now.map((x) => `<li class="nn">${esc(x.item)}<small>${esc(x.reason)}</small></li>`).join("") || "<li>なし</li>"}</ul></div>
+          <div><h4>追加で必要なデータ</h4><ul>${d.needed_data.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>なし</li>"}</ul></div>
+        </div>
+        <p class="tasks-note">今やること（最大 3 つ）は下の「最優先施策」です。</p></div>`
     : `<div class="cmd"><div class="placeholder" style="padding:6px 0">${p.status === "analyzing" ? "分析部の結果が揃うと、ここに「結局、今何をやるべきか」が表示されます。" : "司令塔の判断はありません。"}</div></div>`;
 
   const tasks = b.tasks.length
@@ -76,6 +83,8 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       <div>${nums ? `<div class="nums">${nums}</div>` : ""}${p.input_text ? `<p class="consult">相談: ${esc(p.input_text)}</p>` : ""}${p.extra_text ? `<details style="margin-top:8px"><summary style="font-size:12px;color:var(--muted);cursor:pointer">追加データを表示</summary><p class="consult">${esc(p.extra_text)}</p></details>` : ""}</div>
       <div style="font-size:12px;color:var(--muted);max-width:280px">${p.selection_reason ? `担当の選定: ${esc(p.selection_reason)}` : ""}</div>
     </div>
+    <div class="sec"><div class="sec-head"><h2>今回招集された AI 社員 <span>${selected ? `分析 ${b.roster.analysts.length} 名 + 司令塔${b.roster.executors.length ? ` + 実行 ${b.roster.executors.length} 名` : ""}` : "司令塔が招集中"}</span></h2><div class="hint">相談内容に必要な担当だけを招集し、他の社員は動かしません</div></div>
+      <div class="roster">${rosterChips(b.roster.analysts, "分析部", "analysis")}${rosterChips([b.roster.commander], "司令塔", "command")}${rosterChips(b.roster.executors, "実行部", "execution")}</div></div>
     <div class="sec"><div class="sec-head"><h2>分析部の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
     <div class="sec"><div class="sec-head"><h2>経営司令塔の判断</h2><div class="hint">判断基準: インパクト ÷ 必要時間</div></div>${commander}</div>
     <div class="sec"><div class="sec-head"><h2>最優先施策 <span>最大 3 つ · 実行部の成果物</span></h2><div class="hint">採用すると KPI を確定し「実行中」へ</div></div>${tasks}</div>
@@ -88,17 +97,28 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
 function analysisBlock(a: Analysis, no: string, open: boolean): string {
   if (a.status === "running") return `<details><summary>${no}<span class="nm">${esc(a.employee_name)}<small>分析中…</small></span>${statusChip("running", { running: "作業中" })}</summary></details>`;
   if (a.status === "failed") return `<details><summary>${no}<span class="nm">${esc(a.employee_name)}<small>失敗</small></span>${statusChip("failed")}</summary><div class="body"><p class="findings">${esc(a.findings_md ?? "")}</p></div></details>`;
-  return `<details${open ? " open" : ""}><summary>${no}<span class="nm">${esc(a.employee_name)}<small>${esc(a.headline ?? "")}</small></span>${statusChip("completed")}</summary>
-    <div class="body"><p class="findings">${esc(a.findings_md ?? "")}</p>${fourColumns(a.facts, a.hypotheses, a.evidence, a.needed_data)}</div></details>`;
+  const list = (xs: string[]) => (xs.length ? `<ul>${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : '<p class="none">なし</p>');
+  return `<details${open ? " open" : ""}><summary>${no}<span class="nm">${esc(a.employee_name)}<small>${esc((a.conclusion ?? "").slice(0, 60))}</small></span>${statusChip("completed")}</summary>
+    <div class="body">
+      <h4>結論</h4><p class="findings">${esc(a.conclusion ?? a.findings_md ?? "")}</p>
+      <div class="quad cols3">
+        <div><h4>確認できる事実</h4>${list(a.facts)}</div>
+        <div><h4>仮説（最大 3）と根拠</h4>${a.hypotheses.length ? `<ol class="hyp">${a.hypotheses.map((h) => `<li>${esc(h.hypothesis)}${h.rationale ? `<small>根拠: ${esc(h.rationale)}</small>` : ""}</li>`).join("")}</ol>` : '<p class="none">なし</p>'}</div>
+        <div><h4>根拠となった数字</h4>${evidenceTable(a.evidence)}</div>
+        <div><h4>不足データ</h4>${list(a.missing_data)}</div>
+        <div class="span2"><h4>推奨アクション（最大 3）</h4>${a.actions.length ? `<ol>${a.actions.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : '<p class="none">なし</p>'}</div>
+      </div></div></details>`;
 }
 
-/** 事実 / 仮説 / 根拠となった数字 / 追加で必要なデータ の 4 区分表示 */
-function fourColumns(facts: string[], hypotheses: string[], evidence: Evidence[], needed: string[]): string {
-  const list = (xs: string[]) => (xs.length ? `<ul>${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : '<p class="none">なし</p>');
-  const ev = evidence.length
+function evidenceTable(evidence: Evidence[]): string {
+  return evidence.length
     ? `<table class="ev"><tbody>${evidence.map((e) => `<tr><td>${esc(e.label)}</td><td class="v">${esc(e.value)}</td><td class="s">${esc(e.source)}</td></tr>`).join("")}</tbody></table>`
     : '<p class="none">なし</p>';
-  return `<div class="quad"><div><h4>事実</h4>${list(facts)}</div><div><h4>仮説</h4>${list(hypotheses)}</div><div><h4>根拠となった数字</h4>${ev}</div><div><h4>追加で必要なデータ</h4>${list(needed)}</div></div>`;
+}
+
+function rosterChips(list: RosterEntry[], label: string, dept: string): string {
+  if (!list.length) return "";
+  return `<div class="roster-group"><span class="eyebrow">${esc(label)}</span>${list.map((e) => `<button type="button" class="chip" data-employee="${esc(e.id)}" data-dept="${dept}">${esc(e.name)}</button>`).join("")}</div>`;
 }
 
 function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
@@ -155,7 +175,13 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   }
 
   return `<div class="task" data-task-card="${t.id}"><div class="tp"><div class="top"><span class="rk">${t.rank}</span>${chip}</div><h3>${esc(t.title)}</h3><p class="ob">目的: ${esc(t.objective)}</p>
-    <dl class="kv"><dt>担当</dt><dd><b><button type="button" data-employee="${esc(t.executor_employee_id)}">${esc(t.executor_name)}</button></b> — ${esc(t.assignment_reason)}</dd><dt>根拠</dt><dd>${esc(t.reasoning)}</dd><dt>評価</dt><dd class="score">インパクト ${t.impact_score} / 5 · 必要時間 ${t.effort_hours} h · 比 ${ratio}</dd></dl>
+    ${t.what_to_do ? `<p class="todo">${esc(t.what_to_do)}</p>` : ""}
+    <dl class="kv">
+      <dt>担当 AI</dt><dd><b><button type="button" data-employee="${esc(t.executor_employee_id)}">${esc(t.executor_name)}</button></b> — ${esc(t.assignment_reason)}</dd>
+      <dt>人間側</dt><dd>${esc(t.human_owner ?? "代表")}</dd>
+      <dt>期限</dt><dd>${t.duration_days ? `${t.duration_days} 日` : "—"}${t.due_date ? `（${esc(t.due_date)} まで）` : ""}</dd>
+      <dt>評価</dt><dd class="score">インパクト ${t.impact_score}/5 · 難易度 ${t.difficulty ?? "—"}/5 · 時間 ${t.effort_hours} h · コスト ${esc(t.cost_estimate ?? "不明")} · 比 ${ratio}</dd>
+      <dt>優先理由</dt><dd>${esc(t.reasoning)}</dd></dl>
     ${t.restricted_actions.length ? `<span class="flag">代表承認が必要: ${t.restricted_actions.map((r) => esc(RESTRICTED_JA[r] ?? r)).join("・")}</span>` : ""}</div>${body}${kpi}${act}</div>`;
 }
 

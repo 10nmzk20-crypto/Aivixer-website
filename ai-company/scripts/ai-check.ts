@@ -51,7 +51,7 @@ const sel = await ai.generateJSON({
   schema: SelectAnalystsSchema,
   maxTokens: 1500,
 });
-console.log(`   選ばれた担当: ${sel.data.analysts.join(", ")}`);
+console.log(`   分類: ${sel.data.category} / 招集: ${sel.data.analysts.join(", ")}`);
 console.log(`   理由: ${sel.data.reason}`);
 console.log(`   tokens in/out: ${sel.usage.inputTokens}/${sel.usage.outputTokens}  (${sec()})`);
 
@@ -63,11 +63,11 @@ const res = await ai.generateJSON({
   schema: AnalysisSchema,
 });
 const d = res.data;
-console.log(`   見出し: ${d.headline}`);
-console.log("   事実:"); d.facts.forEach((x) => console.log("     -", x));
-console.log("   仮説:"); d.hypotheses.forEach((x) => console.log("     -", x));
-console.log("   根拠となった数字:"); d.evidence.forEach((e) => console.log(`     - ${e.label}: ${e.value}（${e.source}）`));
-console.log("   追加で必要なデータ:"); d.needed_data.forEach((x) => console.log("     -", x));
-console.log("   所見:", d.findings_md.replace(/\n+/g, " ").slice(0, 200));
+console.log(`   【結論】${d.conclusion}`);
+console.log("   【確認できる事実】"); d.facts.forEach((x) => console.log("     -", x));
+console.log("   【仮説】"); d.hypotheses.forEach((h) => console.log(`     - ${h.hypothesis}\n       根拠: ${h.rationale}`));
+console.log("   【根拠となった数字】"); d.evidence.forEach((e) => console.log(`     - ${e.label}: ${e.value}（${e.source}）`));
+console.log("   【不足データ】"); d.missing_data.forEach((x) => console.log("     -", x));
+console.log("   【推奨アクション】"); d.actions.forEach((x) => console.log("     -", x));
 console.log(`   tokens in/out: ${res.usage.inputTokens}/${res.usage.outputTokens}  (${sec()})`);
-console.log("\nOK: Claude との通信と回答の形式（事実 / 仮説 / 根拠となった数字 / 追加データ）を確認しました。");
+console.log("\nOK: Claude との通信と回答の形式（結論 / 事実 / 仮説と根拠 / 根拠となった数字 / 不足データ / 推奨アクション）を確認しました。");

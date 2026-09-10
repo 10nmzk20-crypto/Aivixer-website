@@ -2,6 +2,7 @@ import type { Context, MiddlewareHandler } from "hono";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { Env } from "../env";
+import { providerName } from "../ai/provider";
 
 /**
  * 認証。優先順位:
@@ -122,5 +123,6 @@ export async function logoutHandler(c: Context<{ Bindings: Env }>) {
 
 export async function meHandler(c: Context<{ Bindings: Env }>) {
   const mode = authMode(c.env);
-  return c.json({ mode, authenticated: await isAuthenticated(c) });
+  // AI の種類（mock か claude か）だけを返す。API キーなどの秘密情報は一切返さない
+  return c.json({ mode, authenticated: await isAuthenticated(c), ai_provider: providerName(c.env), ai_model: providerName(c.env) === "mock" ? "mock" : c.env.AI_MODEL || "claude-opus-5" });
 }

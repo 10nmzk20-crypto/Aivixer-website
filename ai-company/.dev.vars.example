@@ -3,7 +3,7 @@ ENVIRONMENT=development
 # AI_PROVIDER を mock にすると API キーなしで動作確認できる（固定のサンプル回答を返す）
 AI_PROVIDER=mock
 # 本物の Claude を使う場合
-# AI_PROVIDER=anthropic
+# AI_PROVIDER=claude
 # ANTHROPIC_API_KEY=sk-ant-...
 # 共有パスワード方式で保護する場合（Cloudflare Access を使わないとき）
 # APP_PASSWORD=change-me

@@ -77,14 +77,28 @@ export function projectRoutes() {
       analyses: analyses.map((a) => ({
         ...a,
         employee_name: names[a.employee_id] ?? a.employee_id,
+        conclusion: a.headline,
         facts: a.facts_json ? JSON.parse(a.facts_json) : [],
-        hypotheses: a.hypotheses_json ? JSON.parse(a.hypotheses_json) : [],
+        hypotheses: (a.hypotheses_json ? (JSON.parse(a.hypotheses_json) as Array<string | { hypothesis: string; rationale: string }>) : []).map((h) => (typeof h === "string" ? { hypothesis: h, rationale: "" } : h)),
         evidence: a.evidence_json ? JSON.parse(a.evidence_json) : [],
-        needed_data: a.needed_data_json ? JSON.parse(a.needed_data_json) : [],
+        missing_data: a.needed_data_json ? JSON.parse(a.needed_data_json) : [],
+        actions: a.actions_json ? JSON.parse(a.actions_json) : [],
       })),
       decision: decision
-        ? { ...decision, facts: JSON.parse(decision.facts_json), hypotheses: JSON.parse(decision.hypotheses_json), evidence: decision.evidence_json ? JSON.parse(decision.evidence_json) : [], needed_data: JSON.parse(decision.needed_data_json), not_now: JSON.parse(decision.not_now_json) }
+        ? {
+            ...decision,
+            top_issue: decision.top_issue ?? decision.summary_md,
+            reasoning_md: decision.reasoning_md ?? "",
+            evidence: decision.evidence_json ? JSON.parse(decision.evidence_json) : [],
+            needed_data: JSON.parse(decision.needed_data_json),
+            not_now: JSON.parse(decision.not_now_json),
+          }
         : null,
+      roster: {
+        analysts: (project.selected_analysts_json ? (JSON.parse(project.selected_analysts_json) as string[]) : []).map((id) => ({ id, name: names[id] ?? id })),
+        commander: { id: "commander", name: names.commander },
+        executors: [...new Set(tasks.map((t) => t.executor_employee_id))].map((id) => ({ id, name: names[id] ?? id })),
+      },
       tasks: tasks.map((t) => ({ ...t, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, restricted_actions: JSON.parse(t.restricted_actions_json) })),
     });
   });

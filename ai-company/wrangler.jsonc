@@ -34,7 +34,7 @@
   // 秘密でない設定。秘密情報（ANTHROPIC_API_KEY, APP_PASSWORD など）は `wrangler secret put` で登録する。
   "vars": {
     "ENVIRONMENT": "production",
-    "AI_PROVIDER": "anthropic",
+    "AI_PROVIDER": "claude",
     "AI_MODEL": "claude-opus-5",
     "AI_MAX_OUTPUT_TOKENS": "8000",
     "AI_EFFORT": "medium",
