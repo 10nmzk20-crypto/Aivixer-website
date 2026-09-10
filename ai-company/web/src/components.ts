@@ -15,7 +15,9 @@ export const RESTRICTED_JA: Record<string, string> = {
   publish_hp: "HP の本番公開", run_ads: "広告の出稿", post_sns: "SNS 投稿", send_line: "LINE の送信", change_price: "料金の変更", edit_member_data: "会員データの変更",
 };
 export const KNOWLEDGE_KIND_JA: Record<string, string> = { success: "成功", failure: "失敗", idea: "却下・案", analysis: "分析", learning: "学び" };
-export const VERDICT_JA: Record<string, string> = { continue: "続行", improve: "改善", stop: "中止" };
+export const OUTCOME_JA: Record<string, string> = { success: "成功", failure: "失敗", hold: "保留" };
+export const VERDICT_JA: Record<string, string> = { continue: "続行", improve: "改善して再実施", stop: "中止" };
+export const ACHIEVEMENT_JA: Record<string, string> = { achieved: "達成", partial: "一部達成", missed: "未達" };
 
 export const statusChip = (status: string, table: Record<string, string> = TASK_STATUS_JA) =>
   `<span class="status ${esc(status)}">${esc(table[status] ?? status)}</span>`;

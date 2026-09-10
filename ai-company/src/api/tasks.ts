@@ -34,10 +34,12 @@ export function taskRoutes() {
       await repo.createKnowledge({
         kind: "idea",
         title: `却下した案: ${task.title}`,
-        body_md: `${task.objective}\n\n却下理由: ${note ?? "（理由の記載なし）"}`,
+        body_md: `**課題**: ${task.objective}\n\n**内容**: ${task.what_to_do ?? task.title}\n\n**却下理由**: ${note ?? "（理由の記載なし）"}`,
         tags: tagsFor(task),
         source_type: "task",
         source_id: task.id,
+        outcome: "hold",
+        data: { issue: task.objective, action: { title: task.title, what_to_do: task.what_to_do }, result: "却下", reason: note, date: new Date().toISOString().slice(0, 10) },
       });
     }
     const projectStatus = await repo.recomputeProjectStatus(task.project_id);
@@ -63,7 +65,25 @@ export function taskRoutes() {
     return c.json({ ok: true, task: await repo.getTask(task.id), project_status: projectStatus });
   });
 
-  /** KPI 実績を入れて 続行 / 改善 / 中止 を決める → 完了。ナレッジに保存 */
+  /** KPI 実績を保存し、KPI 検証担当 AI に判定を依頼する（結果は案件詳細に表示。最終判断は代表） */
+  r.post("/tasks/:id/verify-ai", async (c) => {
+    const repo = new Repo(c.env.DB);
+    const task = await repo.getTask(c.req.param("id"));
+    if (!task) return c.json({ error: "not_found" }, 404);
+    if (task.status !== "awaiting_verification") return c.json({ error: "bad_state", message: "検証待ちの施策だけ判定を依頼できます。" }, 400);
+    const body = await c.req.json<{ kpis?: Array<{ id: string; actual_value: number | null }> }>();
+    for (const k of body.kpis ?? []) {
+      const row = await repo.getKpi(k.id);
+      if (row && row.task_id === task.id) await repo.updateKpi(k.id, { actual_value: num(k.actual_value) });
+    }
+    const kpis = await repo.listKpis(task.id);
+    if (!kpis.some((k) => k.actual_value !== null)) return c.json({ error: "no_actual", message: "施策後の KPI 実績を 1 つ以上入力してください。" }, 400);
+    await repo.updateTask(task.id, { status: "verifying" });
+    await c.env.VERIFICATION_PIPELINE.create({ params: { taskId: task.id } });
+    return c.json({ ok: true, task: await repo.getTask(task.id) });
+  });
+
+  /** KPI 実績を入れて 続行 / 改善 / 中止 を決める → 完了。構造化ナレッジに保存 */
   r.post("/tasks/:id/verify", async (c) => {
     const repo = new Repo(c.env.DB);
     const task = await repo.getTask(c.req.param("id"));
@@ -76,25 +96,67 @@ export function taskRoutes() {
     const t = new Date().toISOString();
     for (const k of body.kpis ?? []) {
       const row = await repo.getKpi(k.id);
-      if (row && row.task_id === task.id) await repo.updateKpi(k.id, { actual_value: k.actual_value ?? null });
+      if (row && row.task_id === task.id) await repo.updateKpi(k.id, { actual_value: num(k.actual_value) });
     }
     for (const k of await repo.listKpis(task.id)) await repo.updateKpi(k.id, { verdict, verdict_note: note, verified_at: t });
     await repo.updateTask(task.id, { status: "completed" });
 
-    const kpis = await repo.listKpis(task.id);
-    const kind = verdict === "continue" ? "success" : verdict === "stop" ? "failure" : "learning";
-    const verdictJa = { continue: "続行", improve: "改善", stop: "中止" }[verdict];
-    const kpiLines = kpis.map((k) => `- ${k.name}: ${fmt(k.baseline_value)} → ${fmt(k.actual_value)}${k.unit ? " " + k.unit : ""}（目標 ${fmt(k.target_value)}）`).join("\n");
+    const [kpis, verification, project, decision, analyses] = await Promise.all([
+      repo.listKpis(task.id),
+      repo.latestVerification(task.id),
+      repo.getProject(task.project_id),
+      repo.getLatestDecision(task.project_id),
+      repo.listAnalyses(task.project_id),
+    ]);
+    // 成功 / 失敗 / 保留 は KPI 検証担当の達成度と代表の判断から決める
+    const outcome = verdict === "stop" ? "failure" : verification?.achievement === "achieved" ? "success" : verdict === "continue" ? "success" : "hold";
+    const kind = outcome === "success" ? "success" : outcome === "failure" ? "failure" : "learning";
+    const verdictJa = { continue: "続行", improve: "改善して再実施", stop: "中止" }[verdict];
+    const outcomeJa = { success: "成功", failure: "失敗", hold: "保留" }[outcome];
+    const kpiRows = kpis.map((k) => ({ name: k.name, unit: k.unit, baseline_value: k.baseline_value, target_value: k.target_value, actual_value: k.actual_value }));
+    const hypotheses = [...new Set(analyses.flatMap((a) => (JSON.parse(a.hypotheses_json ?? "[]") as Array<string | { hypothesis: string }>).map((h) => (typeof h === "string" ? h : h.hypothesis))))].slice(0, 5);
+
+    // 次回の分析でそのまま使えるよう、構造化して保存する
+    const data = {
+      issue: decision?.top_issue ?? project?.input_text ?? task.objective,
+      period: project?.period_label ?? null,
+      numbers_at_the_time: project?.input_data_json ? JSON.parse(project.input_data_json) : null,
+      hypotheses,
+      action: { title: task.title, what_to_do: task.what_to_do, executor: employeeName(task.executor_employee_id), human_owner: task.human_owner, duration_days: task.duration_days, effort_hours: task.effort_hours, cost: task.cost_estimate },
+      kpis: kpiRows,
+      achievement: verification?.achievement ?? null,
+      result: verdictJa,
+      outcome,
+      lesson: note ?? verification?.lesson ?? null,
+      next_time: verification?.next_time ?? null,
+      other_factors: verification?.other_factors ?? null,
+      date: t.slice(0, 10),
+    };
+    const fmt = (v: number | null) => (v === null ? "不明" : String(v));
+    const body_md = [
+      `**課題**: ${data.issue}`,
+      `**実施した施策**: ${task.title}`,
+      task.what_to_do ? `**内容**: ${task.what_to_do}` : "",
+      `**KPI**:`,
+      kpiRows.map((k) => `- ${k.name}${k.unit ? `（${k.unit}）` : ""}: 施策前 ${fmt(k.baseline_value)} → 目標 ${fmt(k.target_value)} → 施策後 ${fmt(k.actual_value)}`).join("\n") || "- （KPI 未設定）",
+      `**結果**: ${outcomeJa}（${verification ? `KPI 検証担当の判定: ${{ achieved: "達成", partial: "一部達成", missed: "未達" }[verification.achievement] ?? verification.achievement} / ` : ""}代表の判断: ${verdictJa}）`,
+      data.lesson ? `**学び**: ${data.lesson}` : "",
+      data.next_time ? `**次回同じ状況では**: ${data.next_time}` : "",
+      data.other_factors ? `**他の要因の可能性**: ${data.other_factors}` : "",
+    ].filter(Boolean).join("\n\n");
+
     await repo.createKnowledge({
       kind,
-      title: `${verdictJa}: ${task.title}`,
-      body_md: `担当: ${employeeName(task.executor_employee_id)}\n目的: ${task.objective}\n\nKPI:\n${kpiLines || "（KPI 未設定）"}\n\n判断: ${verdictJa}${note ? `\n${note}` : ""}`,
+      title: `${outcomeJa}: ${task.title}`,
+      body_md,
       tags: tagsFor(task),
       source_type: "task",
       source_id: task.id,
+      outcome,
+      data,
     });
     const projectStatus = await repo.recomputeProjectStatus(task.project_id);
-    return c.json({ ok: true, task: await repo.getTask(task.id), kpis, project_status: projectStatus });
+    return c.json({ ok: true, task: await repo.getTask(task.id), kpis, outcome, project_status: projectStatus });
   });
 
   /** KPI 目標の設定（複数まとめて置き換え） */
@@ -133,7 +195,6 @@ function normalizeKpis(kpis: KpiInput[]) {
     .map((k) => ({ name: k.name.trim(), unit: k.unit?.trim() || null, baseline_value: num(k.baseline_value), target_value: num(k.target_value), measure_by: k.measure_by?.trim() || null }));
 }
 const num = (v: unknown): number | null => (v === null || v === undefined || v === "" || Number.isNaN(Number(v)) ? null : Number(v));
-const fmt = (v: number | null) => (v === null ? "—" : String(v));
 
 function tagsFor(task: TaskRow): string[] {
   const tags = new Set<string>([employeeName(task.executor_employee_id)]);

@@ -3,6 +3,7 @@ import { createApp } from "./api/app";
 
 export { AnalysisPipeline } from "./workflows/analysis-pipeline";
 export { RevisionPipeline } from "./workflows/revision-pipeline";
+export { VerificationPipeline } from "./workflows/verification-pipeline";
 
 const app = createApp();
 

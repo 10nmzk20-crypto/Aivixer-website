@@ -29,7 +29,12 @@ export interface KpiRow {
   id: string; task_id: string; name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null;
   measure_by: string | null; confirmed: number; verdict: string | null; verdict_note: string | null; verified_at: string | null; created_at: string; updated_at: string;
 }
-export interface KnowledgeRow { id: string; kind: string; title: string; body_md: string; tags_json: string; source_type: string | null; source_id: string | null; created_at: string }
+export interface KnowledgeRow { id: string; kind: string; title: string; body_md: string; tags_json: string; source_type: string | null; source_id: string | null; outcome: string | null; data_json: string | null; created_at: string }
+export interface VerificationRow {
+  id: string; task_id: string; version: number; achievement: string; achievement_reason: string; effect_likelihood: string; other_factors: string;
+  recommendation: string; recommendation_reason: string; next_step: string; lesson: string; next_time: string; kpis_snapshot_json: string;
+  model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
+}
 
 export const PROJECT_STATUSES = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
 export const TASK_STATUSES = ["candidate", "awaiting_approval", "revising", "in_progress", "awaiting_verification", "verifying", "completed", "rejected", "failed"] as const;
@@ -239,12 +244,26 @@ export class Repo {
     await this.db.prepare(`UPDATE kpis SET ${sets} WHERE id = ?`).bind(...entries.map(([, v]) => v ?? null), id).run();
   }
 
-  // ---------- ナレッジ ----------
-  async createKnowledge(d: { kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null }): Promise<KnowledgeRow> {
+  // ---------- KPI 検証担当の判定 ----------
+  async createVerification(d: { task_id: string; achievement: string; achievement_reason: string; effect_likelihood: string; other_factors: string; recommendation: string; recommendation_reason: string; next_step: string; lesson: string; next_time: string; kpis_snapshot: unknown; model: string; input_tokens: number; output_tokens: number }): Promise<VerificationRow> {
+    const prev = await this.db.prepare("SELECT MAX(version) AS v FROM verifications WHERE task_id = ?").bind(d.task_id).first<{ v: number | null }>();
     const id = newId();
     await this.db
-      .prepare("INSERT INTO knowledge (id, kind, title, body_md, tags_json, source_type, source_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, d.kind, d.title, d.body_md, json(d.tags), d.source_type, d.source_id, now())
+      .prepare("INSERT INTO verifications (id, task_id, version, achievement, achievement_reason, effect_likelihood, other_factors, recommendation, recommendation_reason, next_step, lesson, next_time, kpis_snapshot_json, model, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, d.task_id, (prev?.v ?? 0) + 1, d.achievement, d.achievement_reason, d.effect_likelihood, d.other_factors, d.recommendation, d.recommendation_reason, d.next_step, d.lesson, d.next_time, json(d.kpis_snapshot), d.model, d.input_tokens, d.output_tokens, now())
+      .run();
+    return (await this.db.prepare("SELECT * FROM verifications WHERE id = ?").bind(id).first<VerificationRow>())!;
+  }
+  async latestVerification(taskId: string): Promise<VerificationRow | null> {
+    return (await this.db.prepare("SELECT * FROM verifications WHERE task_id = ? ORDER BY version DESC LIMIT 1").bind(taskId).first<VerificationRow>()) ?? null;
+  }
+
+  // ---------- ナレッジ ----------
+  async createKnowledge(d: { kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome?: string | null; data?: unknown }): Promise<KnowledgeRow> {
+    const id = newId();
+    await this.db
+      .prepare("INSERT INTO knowledge (id, kind, title, body_md, tags_json, source_type, source_id, outcome, data_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, d.kind, d.title, d.body_md, json(d.tags), d.source_type, d.source_id, d.outcome ?? null, d.data === undefined ? null : json(d.data), now())
       .run();
     return (await this.db.prepare("SELECT * FROM knowledge WHERE id = ?").bind(id).first<KnowledgeRow>())!;
   }
@@ -284,8 +303,8 @@ export class Repo {
     const [analyses, decision, tasks] = await Promise.all([this.listAnalyses(id), this.getLatestDecision(id), this.listTasks(id)]);
     const full = await Promise.all(
       tasks.map(async (t) => {
-        const [outputs, approvals, kpis] = await Promise.all([this.listOutputs(t.id), this.listApprovals(t.id), this.listKpis(t.id)]);
-        return { ...t, outputs, approvals, kpis };
+        const [outputs, approvals, kpis, verification] = await Promise.all([this.listOutputs(t.id), this.listApprovals(t.id), this.listKpis(t.id), this.latestVerification(t.id)]);
+        return { ...t, outputs, approvals, kpis, verification };
       }),
     );
     return { project, analyses, decision, tasks: full };

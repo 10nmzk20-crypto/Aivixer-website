@@ -53,6 +53,8 @@ export function getProvider(env: Env): AiProvider {
       model: env.AI_MODEL || "claude-opus-5",
       maxOutputTokens: Number(env.AI_MAX_OUTPUT_TOKENS || 8000),
       effort: (env.AI_EFFORT as AnthropicEffort) || "medium",
+      // 動作確認用。通常は未設定（本物の Anthropic API を使う）
+      baseURL: env.ANTHROPIC_BASE_URL || undefined,
     });
   }
   throw new AiProviderError(`未対応の AI_PROVIDER です: ${name}`, false);

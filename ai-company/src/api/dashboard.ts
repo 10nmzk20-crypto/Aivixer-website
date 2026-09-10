@@ -14,7 +14,7 @@ export function dashboardRoutes() {
       repo.countTasksByStatus(),
       repo.latestDecidedProject(),
       repo.listProjects({ status: "analyzing", limit: 1 }),
-      repo.listTasksByStatus(["awaiting_approval", "revising", "in_progress", "awaiting_verification"], 100),
+      repo.listTasksByStatus(["awaiting_approval", "revising", "in_progress", "awaiting_verification", "verifying"], 100),
       repo.countKnowledge(),
       repo.listEmployees(),
     ]);
@@ -26,8 +26,9 @@ export function dashboardRoutes() {
     for (const a of runningAnalyses) if (a.status === "running") busy[a.employee_id] = "分析中";
     if (runningProject) busy.commander = "分析を統括中";
     for (const t of activeTasks) {
-      const label = { awaiting_approval: "承認待ちの成果物あり", revising: "修正版を作成中", in_progress: "施策を実行中", awaiting_verification: "検証待ち" }[t.status] ?? t.status;
+      const label = { awaiting_approval: "承認待ちの成果物あり", revising: "修正版を作成中", in_progress: "施策を実行中", awaiting_verification: "検証待ち", verifying: "KPI 検証中" }[t.status] ?? t.status;
       if (!busy[t.executor_employee_id]) busy[t.executor_employee_id] = label;
+      if (t.status === "verifying") busy.kpi = "KPI を判定中";
     }
     if (runningProject && runningAnalyses.length === 0) busy.commander = "分析担当を選定中";
 
@@ -45,6 +46,9 @@ export function dashboardRoutes() {
       running_project: runningProject ? { id: runningProject.id, title: runningProject.title, status: runningProject.status } : null,
       latest_project: latest ? { id: latest.id, title: latest.title, status: latest.status, created_at: latest.created_at } : null,
       priorities: priorities.map((t) => ({ ...t, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, restricted_actions: JSON.parse(t.restricted_actions_json) })),
+      active_tasks: activeTasks
+        .filter((t) => t.status === "in_progress" || t.status === "awaiting_verification" || t.status === "verifying")
+        .map((t) => ({ id: t.id, project_id: t.project_id, project_title: t.project_title, title: t.title, status: t.status, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, due_date: t.due_date, human_owner: t.human_owner })),
       employees: employees.map((e) => ({ ...e, watches: JSON.parse(e.watches_json), current: busy[e.id] ?? null })),
       totals: { projects: Object.values(projectCounts).reduce((a, b) => a + b, 0), knowledge: knowledgeCount },
     });

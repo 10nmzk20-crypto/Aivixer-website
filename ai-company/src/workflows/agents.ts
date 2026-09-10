@@ -2,7 +2,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../env";
 import { Repo, type ProjectRow, type TaskRow } from "../db/repo";
 import { AiProviderError, getProvider, type AiProvider } from "../ai/provider";
-import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema } from "../ai/schemas";
+import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, VerificationSchema } from "../ai/schemas";
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
 import { detectRestrictedActions } from "../policy/restricted-actions";
@@ -52,11 +52,43 @@ export function formatInput(project: ProjectRow): string {
   return lines.join("\n");
 }
 
-async function knowledgeContext(repo: Repo): Promise<string> {
-  const rows = await repo.listKnowledge({ limit: 30 });
+/**
+ * 過去のナレッジを AI に渡す文章にする。
+ * 今回の相談と語が重なる記録を先に並べ、上位は施策・KPI・結果・学びまで含めて渡す。
+ */
+async function knowledgeContext(repo: Repo, query: string): Promise<string> {
+  const rows = await repo.listKnowledge({ limit: 60 });
   if (rows.length === 0) return "【過去のナレッジ】まだありません。";
   const kindJa: Record<string, string> = { success: "成功", failure: "失敗", idea: "却下・案", analysis: "分析", learning: "学び" };
-  return ["【過去のナレッジ（新しい順・最大 30 件）】", ...rows.map((k) => `- [${kindJa[k.kind] ?? k.kind}] ${k.title}（${k.created_at.slice(0, 10)}）`)].join("\n");
+  const words = [...new Set((query.match(/[一-龥ァ-ヶーa-zA-Z]{2,}/g) ?? []).map((w) => w.toLowerCase()))];
+  const score = (k: { title: string; tags_json: string; body_md: string }) => {
+    const hay = `${k.title} ${k.tags_json} ${k.body_md}`.toLowerCase();
+    return words.reduce((n, w) => n + (hay.includes(w) ? 1 : 0), 0);
+  };
+  const sorted = [...rows].sort((a, b) => score(b) - score(a));
+  const detailed = sorted.slice(0, 5);
+  const rest = sorted.slice(5, 30);
+  const fmt = (v: unknown) => (v === null || v === undefined ? "不明" : String(v));
+  const lines = detailed.map((k) => {
+    const d = k.data_json ? (JSON.parse(k.data_json) as Record<string, any>) : null;
+    if (!d) return `- [${kindJa[k.kind] ?? k.kind}] ${k.title}（${k.created_at.slice(0, 10)}）`;
+    const kpi = Array.isArray(d.kpis) ? d.kpis.map((x: any) => `${x.name}: ${fmt(x.baseline_value)} → 目標 ${fmt(x.target_value)} → 実績 ${fmt(x.actual_value)}`).join(" / ") : "";
+    return [
+      `- [${kindJa[k.kind] ?? k.kind}] ${k.title}（${k.created_at.slice(0, 10)}）`,
+      `    当時の課題: ${fmt(d.issue)}`,
+      d.action?.title ? `    実施した施策: ${d.action.title}` : "",
+      kpi ? `    KPI: ${kpi}` : "",
+      d.result ? `    結果: ${d.result}${d.achievement ? `（${d.achievement}）` : ""}` : "",
+      d.lesson ? `    学び: ${d.lesson}` : "",
+      d.next_time ? `    次回は: ${d.next_time}` : "",
+    ].filter(Boolean).join("\n");
+  });
+  return [
+    "【過去のナレッジ（今回の相談に近い順）】",
+    ...lines,
+    ...(rest.length ? ["【その他の記録（題名のみ）】", ...rest.map((k) => `- [${kindJa[k.kind] ?? k.kind}] ${k.title}（${k.created_at.slice(0, 10)}）`)] : []),
+    "同じ失敗や同じ案を繰り返さないこと。似た施策を提案する場合は、前回との違いを必ず書くこと。",
+  ].join("\n");
 }
 
 /** 再試行してよい失敗かを Workflow に伝える */
@@ -124,7 +156,7 @@ export async function runAnalyst(env: Env, projectId: string, employeeId: string
   try {
     const { data, usage } = await ai.generateJSON({
       system: system(employeeId),
-      user: `${formatInput(project)}\n\n${await knowledgeContext(repo)}\n\nあなたの担当分野の観点で分析してください。`,
+      user: `${formatInput(project)}\n\n${await knowledgeContext(repo, `${project.input_text} ${project.title}`)}\n\nあなたの担当分野の観点で分析してください。`,
       schema: AnalysisSchema,
     });
     await repo.completeAnalysis(projectId, employeeId, {
@@ -174,7 +206,7 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
   try {
     result = await ai.generateJSON({
       system: system("commander"),
-      user: `${formatInput(project)}\n\n【分析部の結果】\n${report}\n\n${await knowledgeContext(repo)}\n\n【施策の担当に選べる実行 AI】\n${executors}\n\n統合判断をしてください。tasks は最大 3 つ、executor_employee_id は上の id から選んでください。`,
+      user: `${formatInput(project)}\n\n【分析部の結果】\n${report}\n\n${await knowledgeContext(repo, `${project.input_text} ${project.title} ${analyses.map((a) => a.headline).join(" ")}`)}\n\n【施策の担当に選べる実行 AI】\n${executors}\n\n統合判断をしてください。tasks は最大 3 つ、executor_employee_id は上の id から選んでください。`,
       schema: SynthesisSchema,
     });
   } catch (err) {
@@ -269,6 +301,46 @@ export async function produceOutput(env: Env, taskId: string, revisionNote: stri
     const e = asWorkflowError(err);
     if (e instanceof NonRetryableError) await repo.updateTask(taskId, { status: "failed" });
     throw e;
+  }
+}
+
+// ---------- Phase 2: KPI 検証担当が施策前・目標・施策後を比べて判定する ----------
+export async function verifyTask(env: Env, taskId: string): Promise<string> {
+  const repo = new Repo(env.DB);
+  const task = await repo.getTask(taskId);
+  if (!task) throw new NonRetryableError("施策が見つかりません。");
+  if (task.status !== "verifying") {
+    // すでに判定済み（再実行時）
+    const existing = await repo.latestVerification(taskId);
+    if (existing) return existing.id;
+  }
+  const [project, decision, kpis, output] = await Promise.all([repo.getProject(task.project_id), repo.getLatestDecision(task.project_id), repo.listKpis(taskId), repo.latestOutput(taskId)]);
+  const fmt = (v: number | null) => (v === null ? "不明" : String(v));
+  const kpiLines = kpis.map((k) => `- ${k.name}${k.unit ? `（${k.unit}）` : ""}: 施策前 ${fmt(k.baseline_value)} / 目標 ${fmt(k.target_value)} / 施策後 ${fmt(k.actual_value)}${k.measure_by ? ` / 計測期日 ${k.measure_by}` : ""}`).join("\n") || "- KPI が設定されていません";
+  const user = [
+    project ? `【当時の入力】\n${formatInput(project)}` : "",
+    decision ? `【当時の最重要課題】${decision.top_issue ?? decision.summary_md}` : "",
+    `【実施した施策】\n題名: ${task.title}\n目的: ${task.objective}\n具体的に何をしたか: ${task.what_to_do ?? "（未記載）"}\n期間: ${task.duration_days ?? "不明"} 日\n担当: ${employeeName(task.executor_employee_id)} / ${task.human_owner ?? "代表"}\nコスト: ${task.cost_estimate ?? "不明"}`,
+    output ? `【成果物（抜粋）】\n${output.content_md.slice(0, 1500)}` : "",
+    `【KPI】\n${kpiLines}`,
+    "施策前・目標・施策後を比較して判定してください。",
+  ].filter(Boolean).join("\n\n");
+
+  const ai = provider(env);
+  try {
+    const { data, usage } = await ai.generateJSON({ system: system("kpi"), user, schema: VerificationSchema, maxTokens: 3000 });
+    const row = await repo.createVerification({
+      task_id: taskId,
+      ...data,
+      kpis_snapshot: kpis.map((k) => ({ name: k.name, unit: k.unit, baseline_value: k.baseline_value, target_value: k.target_value, actual_value: k.actual_value })),
+      model: usage.model,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
+    });
+    await repo.updateTask(taskId, { status: "awaiting_verification" });
+    return row.id;
+  } catch (err) {
+    throw asWorkflowError(err);
   }
 }
 

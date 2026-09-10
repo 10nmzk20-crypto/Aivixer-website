@@ -28,7 +28,8 @@
   // Workflows: 分析パイプラインと、修正依頼時の再作成
   "workflows": [
     { "name": "vixer-analysis-pipeline", "binding": "ANALYSIS_PIPELINE", "class_name": "AnalysisPipeline" },
-    { "name": "vixer-revision-pipeline", "binding": "REVISION_PIPELINE", "class_name": "RevisionPipeline" }
+    { "name": "vixer-revision-pipeline", "binding": "REVISION_PIPELINE", "class_name": "RevisionPipeline" },
+    { "name": "vixer-verification-pipeline", "binding": "VERIFICATION_PIPELINE", "class_name": "VerificationPipeline" }
   ],
 
   // 秘密でない設定。秘密情報（ANTHROPIC_API_KEY, APP_PASSWORD など）は `wrangler secret put` で登録する。

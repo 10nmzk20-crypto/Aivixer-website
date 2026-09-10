@@ -6,6 +6,7 @@ export interface Env {
   ASSETS: Fetcher;
   ANALYSIS_PIPELINE: Workflow<AnalysisPipelineParams>;
   REVISION_PIPELINE: Workflow<RevisionPipelineParams>;
+  VERIFICATION_PIPELINE: Workflow<VerificationPipelineParams>;
 
   ENVIRONMENT?: string; // 'development' | 'production'
   AI_PROVIDER?: string; // 'anthropic' | 'mock'
@@ -15,6 +16,8 @@ export interface Env {
 
   // 秘密情報（wrangler secret / .dev.vars）
   ANTHROPIC_API_KEY?: string;
+  /** 動作確認用に API の送信先を差し替える。本番では設定しない */
+  ANTHROPIC_BASE_URL?: string;
   APP_PASSWORD?: string;
   APP_SESSION_SECRET?: string;
 
@@ -30,4 +33,8 @@ export interface AnalysisPipelineParams {
 export interface RevisionPipelineParams {
   taskId: string;
   note: string;
+}
+
+export interface VerificationPipelineParams {
+  taskId: string;
 }

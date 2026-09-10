@@ -1,5 +1,5 @@
-import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type RosterEntry, type TaskFull } from "../api";
-import { esc, fmtDate, fmtNum, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
+import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type RosterEntry, type TaskFull, type Verification } from "../api";
+import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
 /** ③ 案件詳細: 進捗 → 入力 → 分析部 → 経営司令塔 → 最優先施策（成果物・承認・KPI） */
@@ -28,7 +28,7 @@ export async function renderProject(main: HTMLElement, params: Record<string, st
       lastSig = sig;
       draw(main, b, openVersions, () => load(true));
     }
-    const busy = b.project.status === "analyzing" || b.project.status === "candidates" || b.tasks.some((t) => t.status === "candidate" || t.status === "revising");
+    const busy = b.project.status === "analyzing" || b.project.status === "candidates" || b.tasks.some((t) => t.status === "candidate" || t.status === "revising" || t.status === "verifying");
     window.clearTimeout(timer);
     if (busy) timer = window.setTimeout(() => load().catch(() => undefined), 3000);
   };
@@ -37,7 +37,7 @@ export async function renderProject(main: HTMLElement, params: Record<string, st
 }
 
 function signature(b: ProjectBundle): string {
-  return [b.project.status, b.project.updated_at, b.project.selected_analysts?.join(",") ?? "", ...b.analyses.map((a) => a.employee_id + a.status), b.decision?.id ?? "", ...b.tasks.map((t) => `${t.id}:${t.status}:${t.outputs.length}:${t.kpis.map((k) => k.id + k.actual_value + k.confirmed).join("|")}`)].join(";");
+  return [b.project.status, b.project.updated_at, b.project.selected_analysts?.join(",") ?? "", ...b.analyses.map((a) => a.employee_id + a.status), b.decision?.id ?? "", ...b.tasks.map((t) => `${t.id}:${t.status}:${t.outputs.length}:${t.verification?.id ?? ""}:${t.kpis.map((k) => k.id + k.actual_value + k.confirmed).join("|")}`)].join(";");
 }
 
 function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, number>, refresh: () => Promise<void>) {
@@ -155,16 +155,26 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
     case "in_progress":
       act = `<div class="note-box"><span class="badge">採用</span><span>実行中です。実施が終わったら「実施した」を押してください。</span></div><div class="act"><button type="button" class="btn" data-implemented="${t.id}">実施した</button></div>`;
       break;
-    case "awaiting_verification":
-      act = `<div class="note-box"><span class="badge">検証待ち</span><span>KPI の実績を入力し、続行 / 改善 / 中止 を選んでください。</span></div>
-        <div class="panel" data-open="1" id="ver-${t.id}">
-          ${t.kpis.map((k) => `<div class="r" style="justify-content:space-between;align-items:center"><span style="font-size:13px;color:var(--muted)">${esc(k.name)}${k.unit ? `（${esc(k.unit)}）` : ""} 目標 ${fmtNum(k.target_value)}</span><input inputmode="decimal" placeholder="実績" data-actual="${k.id}" value="${k.actual_value ?? ""}" style="width:120px;min-height:40px;text-align:right;font-family:var(--mono)"></div>`).join("")}
-          <div class="seg" data-seg="${t.id}"><button type="button" data-verdict="continue" aria-pressed="false">続行</button><button type="button" data-verdict="improve" aria-pressed="false">改善</button><button type="button" data-verdict="stop" aria-pressed="false">中止</button></div>
-          <label class="f">メモ（学びとしてナレッジに残ります）<textarea data-vernote="${t.id}" style="min-height:64px"></textarea></label>
-          <div class="r"><button type="button" class="btn sm" data-back="${t.id}">実行中に戻す</button><button type="button" class="btn sm primary" data-versend="${t.id}">検証を完了</button></div></div>`;
+    case "verifying":
+      act = `<div class="note-box"><span class="badge">検証中</span><span>KPI 検証担当が施策前・目標・施策後を比較しています…</span></div>`;
       break;
+    case "awaiting_verification": {
+      const v = t.verification;
+      const rec = v?.recommendation ?? "";
+      act = `<div class="note-box"><span class="badge">検証待ち</span><span>${v ? "KPI 検証担当の判定を確認し、代表が最終判断してください。" : "施策後の KPI 実績を入力し、KPI 検証担当に判定を依頼してください。"}</span></div>
+        <div class="panel" data-open="1" id="ver-${t.id}">
+          <div class="eyebrow">KPI 実績（施策前 → 目標 → 施策後）</div>
+          ${t.kpis.length ? t.kpis.map((k) => `<div class="r" style="justify-content:space-between;align-items:center;gap:10px"><span style="font-size:13px;color:var(--muted)">${esc(k.name)}${k.unit ? `（${esc(k.unit)}）` : ""}<br><b style="font-family:var(--mono);font-weight:400;color:var(--text)">${fmtNum(k.baseline_value)} → ${fmtNum(k.target_value)}</b></span><input inputmode="decimal" placeholder="施策後" data-actual="${k.id}" value="${k.actual_value ?? ""}" style="width:120px;min-height:40px;text-align:right;font-family:var(--mono)"></div>`).join("") : '<p class="none" style="margin:0;color:var(--faint);font-size:13px">KPI が設定されていません。「編集」で追加できます。</p>'}
+          <div class="r"><button type="button" class="btn sm" data-back="${t.id}">実行中に戻す</button><button type="button" class="btn sm${v ? "" : " primary"}" data-verai="${t.id}">${v ? "再判定を依頼" : "KPI 検証担当に判定を依頼"}</button></div>
+          ${v ? verificationBlock(v) : ""}
+          <div class="eyebrow" style="margin-top:8px">代表の最終判断</div>
+          <div class="seg" data-seg="${t.id}"><button type="button" data-verdict="continue" aria-pressed="${rec === "continue"}">続行</button><button type="button" data-verdict="improve" aria-pressed="${rec === "improve"}">改善して再実施</button><button type="button" data-verdict="stop" aria-pressed="${rec === "stop"}">中止</button></div>
+          <label class="f">メモ（学びとしてナレッジに残ります）<textarea data-vernote="${t.id}" style="min-height:64px" placeholder="${v ? "空欄なら KPI 検証担当の学びをそのまま記録します" : ""}"></textarea></label>
+          <div class="r"><button type="button" class="btn sm primary" data-versend="${t.id}">検証を完了してナレッジに保存</button></div></div>`;
+      break;
+    }
     case "completed":
-      act = `<div class="note-box"><span class="badge">完了 · ${esc(VERDICT_JA[t.kpis[0]?.verdict ?? ""] ?? "")}</span><span>${esc(t.kpis[0]?.verdict_note ?? "ナレッジに記録しました。")}</span></div>`;
+      act = `<div class="note-box"><span class="badge">完了 · ${esc(VERDICT_JA[t.kpis[0]?.verdict ?? ""] ?? "")}</span><span>${esc(t.kpis[0]?.verdict_note ?? "ナレッジに記録しました。")}</span></div>${t.verification ? `<div class="panel" data-open="1">${verificationBlock(t.verification)}</div>` : ""}`;
       break;
     case "rejected":
       act = `<div class="note-box"><span class="badge dim">却下</span><span>${esc(t.approvals.filter((a) => a.decision === "rejected").pop()?.note ?? "ナレッジに「却下した案」として保存しました。")}</span></div>`;
@@ -183,6 +193,15 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
       <dt>評価</dt><dd class="score">インパクト ${t.impact_score}/5 · 難易度 ${t.difficulty ?? "—"}/5 · 時間 ${t.effort_hours} h · コスト ${esc(t.cost_estimate ?? "不明")} · 比 ${ratio}</dd>
       <dt>優先理由</dt><dd>${esc(t.reasoning)}</dd></dl>
     ${t.restricted_actions.length ? `<span class="flag">代表承認が必要: ${t.restricted_actions.map((r) => esc(RESTRICTED_JA[r] ?? r)).join("・")}</span>` : ""}</div>${body}${kpi}${act}</div>`;
+}
+
+/** KPI 検証担当の判定結果 */
+function verificationBlock(v: Verification): string {
+  return `<div class="verif">
+    <div class="eyebrow">KPI 検証担当の判定 <span class="badge ${v.achievement === "achieved" ? "" : "dim"}">${esc(ACHIEVEMENT_JA[v.achievement] ?? v.achievement)}</span></div>
+    <p>${esc(v.achievement_reason)}</p>
+    <dl class="kv"><dt>効いた可能性</dt><dd>${esc(v.effect_likelihood)}</dd><dt>他の要因</dt><dd>${esc(v.other_factors)}</dd><dt>推奨</dt><dd><b>${esc(VERDICT_JA[v.recommendation] ?? v.recommendation)}</b> — ${esc(v.recommendation_reason)}</dd><dt>次にやること</dt><dd>${esc(v.next_step)}</dd><dt>学び</dt><dd>${esc(v.lesson)}</dd><dt>次回は</dt><dd>${esc(v.next_time)}</dd></dl>
+  </div>`;
 }
 
 function kpiEditor(t: TaskFull): string {
@@ -233,6 +252,12 @@ function bind(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
   q<HTMLElement>("[data-implemented]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.implemented}/status`, { status: "awaiting_verification" }), "「検証待ち」にしました。期日に KPI を入力してください。")));
   q<HTMLElement>("[data-back]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.back}/status`, { status: "in_progress" }))));
   q<HTMLElement>("[data-seg] button").forEach((btn) => btn.addEventListener("click", () => { btn.parentElement!.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === btn))); }));
+  q<HTMLElement>("[data-verai]").forEach((el) => el.addEventListener("click", () => {
+    const id = el.dataset.verai!;
+    const kpis = [...q<HTMLInputElement>(`#ver-${id} [data-actual]`)].map((i) => ({ id: i.dataset.actual!, actual_value: num(i.value) }));
+    if (!kpis.some((k) => k.actual_value !== null)) return toast("施策後の KPI 実績を 1 つ以上入力してください。");
+    run(() => api.post(`/api/tasks/${id}/verify-ai`, { kpis }), "KPI 検証担当に判定を依頼しました。結果はこの画面に表示されます。");
+  }));
   q<HTMLElement>("[data-versend]").forEach((el) => el.addEventListener("click", () => {
     const id = el.dataset.versend!;
     const verdict = main.querySelector<HTMLElement>(`[data-seg="${id}"] button[aria-pressed="true"]`)?.dataset.verdict;

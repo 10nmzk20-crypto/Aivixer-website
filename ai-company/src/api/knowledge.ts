@@ -10,7 +10,7 @@ export function knowledgeRoutes() {
     const kind = c.req.query("kind") || undefined;
     const tag = c.req.query("tag") || undefined;
     const rows = await repo.listKnowledge({ kind, limit: Number(c.req.query("limit") || 100) });
-    const items = rows.map((k) => ({ ...k, tags: JSON.parse(k.tags_json) as string[] })).filter((k) => !tag || k.tags.includes(tag));
+    const items = rows.map((k) => ({ ...k, tags: JSON.parse(k.tags_json) as string[], data: k.data_json ? JSON.parse(k.data_json) : null })).filter((k) => !tag || k.tags.includes(tag));
     return c.json({ knowledge: items });
   });
 
@@ -21,7 +21,8 @@ export function knowledgeRoutes() {
     const kind = body.kind ?? "learning";
     if (!["success", "failure", "idea", "analysis", "learning"].includes(kind)) return c.json({ error: "bad_kind" }, 400);
     if (!body.title?.trim()) return c.json({ error: "title_required", message: "題名を入力してください。" }, 400);
-    const row = await repo.createKnowledge({ kind, title: body.title.trim(), body_md: (body.body_md ?? "").trim(), tags: body.tags ?? [], source_type: "manual", source_id: null });
+    const outcome = kind === "success" ? "success" : kind === "failure" ? "failure" : "hold";
+    const row = await repo.createKnowledge({ kind, title: body.title.trim(), body_md: (body.body_md ?? "").trim(), tags: body.tags ?? [], source_type: "manual", source_id: null, outcome });
     return c.json({ knowledge: { ...row, tags: JSON.parse(row.tags_json) } }, 201);
   });
 

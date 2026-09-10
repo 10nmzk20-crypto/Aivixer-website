@@ -51,6 +51,14 @@ export async function renderDashboard(main: HTMLElement) {
       <div class="list">${prio}</div>
     </div>
     <div class="sec">
+      <div class="sec-head"><h2>実行中・検証待ちの施策 <span>${d.active_tasks.length} 件</span></h2><div class="hint"><a href="#/history?status=in_progress">履歴で見る →</a></div></div>
+      <div class="list">${
+        d.active_tasks.length
+          ? d.active_tasks.map((t) => `<a class="row" href="#/projects/${t.project_id}"><span class="rk d">${esc(t.due_date ? t.due_date.slice(5).replace("-", ".") : "—")}</span><span><span class="t">${esc(t.title)}</span><span class="m">${esc(t.project_title)} · 担当 <b>${esc(t.executor_name)}</b>${t.human_owner ? ` / ${esc(t.human_owner)}` : ""}${t.due_date ? ` · 期限 ${esc(t.due_date)}` : ""}</span></span>${statusChip(t.status)}</a>`).join("")
+          : `<div class="row"><span class="rk">—</span><span class="empty">実行中の施策はありません。施策を「採用」すると、ここに表示されます。</span><span></span></div>`
+      }</div>
+    </div>
+    <div class="sec">
       <div class="sec-head"><h2>AI 社員 <span>${d.employees.length} 名</span></h2><div class="hint">カードをタップすると役割・現在の仕事・過去の成果を表示</div></div>
       ${dept("analysis", "分析部")}${dept("command", "経営司令塔")}${dept("execution", "実行部")}
     </div>

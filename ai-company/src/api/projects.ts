@@ -99,7 +99,12 @@ export function projectRoutes() {
         commander: { id: "commander", name: names.commander },
         executors: [...new Set(tasks.map((t) => t.executor_employee_id))].map((id) => ({ id, name: names[id] ?? id })),
       },
-      tasks: tasks.map((t) => ({ ...t, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, restricted_actions: JSON.parse(t.restricted_actions_json) })),
+      tasks: tasks.map((t) => ({
+        ...t,
+        executor_name: names[t.executor_employee_id] ?? t.executor_employee_id,
+        restricted_actions: JSON.parse(t.restricted_actions_json),
+        verification: t.verification ? { ...t.verification, kpis_snapshot: JSON.parse(t.verification.kpis_snapshot_json) } : null,
+      })),
     });
   });
 

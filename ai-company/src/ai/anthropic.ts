@@ -8,6 +8,7 @@ interface Options {
   model: string;
   maxOutputTokens: number;
   effort: AnthropicEffort;
+  baseURL?: string;
 }
 
 /** Anthropic Claude を使う実装 */
@@ -19,7 +20,7 @@ export class AnthropicProvider implements AiProvider {
   constructor(opts: Options) {
     this.opts = opts;
     // SDK 側の再試行は少なめにし、再試行は Workflow に任せる。1 回の回答に数分かかることがあるので timeout は長め
-    this.client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 1, timeout: 10 * 60 * 1000 });
+    this.client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 1, timeout: 10 * 60 * 1000, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) });
   }
 
   async generateJSON<T extends z.ZodType>(req: JsonRequest<T>): Promise<{ data: z.infer<T>; usage: GenerateUsage }> {

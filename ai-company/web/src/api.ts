@@ -36,7 +36,13 @@ export interface Task {
 export interface Output { id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string }
 export interface Approval { id: string; decision: string; note: string | null; decided_by: string; decided_at: string }
 export interface Kpi { id: string; task_id: string; name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null; measure_by: string | null; confirmed: number; verdict: string | null; verdict_note: string | null; verified_at: string | null }
-export interface TaskFull extends Task { outputs: Output[]; approvals: Approval[]; kpis: Kpi[] }
+export interface Verification {
+  id: string; version: number; achievement: "achieved" | "partial" | "missed"; achievement_reason: string; effect_likelihood: string; other_factors: string;
+  recommendation: "continue" | "improve" | "stop"; recommendation_reason: string; next_step: string; lesson: string; next_time: string;
+  kpis_snapshot: Array<{ name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null }>; model: string | null; created_at: string;
+}
+export interface TaskFull extends Task { outputs: Output[]; approvals: Approval[]; kpis: Kpi[]; verification: Verification | null }
+export interface ActiveTask { id: string; project_id: string; project_title: string; title: string; status: string; executor_name: string; due_date: string | null; human_owner: string | null }
 export interface Evidence { label: string; value: string; source: string }
 export interface Hypothesis { hypothesis: string; rationale: string }
 export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; conclusion: string | null; facts: string[]; hypotheses: Hypothesis[]; evidence: Evidence[]; missing_data: string[]; actions: string[]; findings_md: string | null; model: string | null }
@@ -53,8 +59,15 @@ export interface Dashboard {
   running_project: { id: string; title: string; status: string } | null;
   latest_project: { id: string; title: string; status: string; created_at: string } | null;
   priorities: Task[];
+  active_tasks: ActiveTask[];
   employees: Employee[];
   totals: { projects: number; knowledge: number };
 }
-export interface Knowledge { id: string; kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; created_at: string }
+export interface KnowledgeData {
+  issue?: string; period?: string | null; numbers_at_the_time?: Record<string, number | string> | null; hypotheses?: string[];
+  action?: { title?: string; what_to_do?: string | null; executor?: string; human_owner?: string | null; duration_days?: number | null; effort_hours?: number; cost?: string | null };
+  kpis?: Array<{ name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null }>;
+  achievement?: string | null; result?: string; outcome?: string; lesson?: string | null; next_time?: string | null; other_factors?: string | null; reason?: string | null; date?: string;
+}
+export interface Knowledge { id: string; kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome: string | null; data: KnowledgeData | null; created_at: string }
 export interface Metric { id: string; label: string; unit: string }

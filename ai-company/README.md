@@ -81,7 +81,7 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
 
 | 名前 | 意味 | 初期値 |
 |---|---|---|
-| `AI_PROVIDER` | `anthropic` か `mock` | `anthropic` |
+| `AI_PROVIDER` | `claude`（本番）か `mock`（固定回答・開発用） | `claude` |
 | `AI_MODEL` | 使うモデル | `claude-opus-5` |
 | `AI_MAX_OUTPUT_TOKENS` | 1 回の回答の上限 | `8000` |
 | `AI_EFFORT` | 考える深さ（`low` / `medium` / `high`） | `medium` |
@@ -111,6 +111,7 @@ ai-company/
 | Method | Path | 内容 |
 |---|---|---|
 | GET | `/api/health` | 稼働確認（認証不要） |
+| POST | `/api/tasks/:id/verify-ai` | KPI 実績を保存し、KPI 検証担当 AI に判定を依頼 |
 | GET/POST | `/api/auth/me`, `/api/auth/login`, `/api/auth/logout` | 認証状態・共有パスワードのログイン |
 | GET | `/api/dashboard` | 今日の状況・最優先・社員の稼働 |
 | GET | `/api/employees`, `/api/employees/:id` | AI 社員一覧・詳細（役割・現在の仕事・過去の成果） |
