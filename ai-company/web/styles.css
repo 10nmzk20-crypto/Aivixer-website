@@ -142,15 +142,21 @@ label.f input, label.f select, label.f textarea { letter-spacing: 0; font-size: 
 .acc .body { padding: 4px 18px 18px 72px; }
 .acc details.skip summary { color: var(--faint); cursor: default; }
 .acc details.skip summary .nm { color: var(--faint); font-weight: 400; }
-.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.trio h4, .cmd h4 { margin: 0 0 6px; font-family: var(--body); font-weight: 500; font-size: 12px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
-.trio ul, .cmd ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--text-2); }
-.trio li, .cmd li { margin-bottom: 4px; }
+.quad { display: grid; grid-template-columns: 1fr 1fr 1.3fr 1fr; gap: 14px; }
+.quad h4, .cmd h4 { margin: 0 0 6px; font-family: var(--body); font-weight: 500; font-size: 12px; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.quad ul, .cmd ul { margin: 0; padding-left: 18px; font-size: 14px; color: var(--text-2); }
+.quad li, .cmd li { margin-bottom: 4px; }
+.quad .none { margin: 0; color: var(--faint); font-size: 13px; }
+.ev { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ev td { border-bottom: 1px solid var(--line); padding: 4px 8px 4px 0; vertical-align: top; color: var(--text-2); }
+.ev td.v { font-family: var(--mono); color: var(--text); white-space: nowrap; }
+.ev td.s { color: var(--faint); font-size: 12px; }
 .findings { margin: 0 0 14px; font-size: 14px; color: var(--text-2); white-space: pre-wrap; }
 
 .cmd { border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); padding: 22px 24px; }
 .cmd .lead { font-size: 17px; font-weight: 400; line-height: 1.6; margin: 0 0 16px; white-space: pre-wrap; }
-.cmd .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.cmd .grid { padding-top: 16px; border-top: 1px solid var(--line); }
+.cmd .notnow { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
 .cmd .nn small { display: block; color: var(--muted); font-size: 12px; }
 
 .tasks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
@@ -242,12 +248,12 @@ label.f input, label.f select, label.f textarea { letter-spacing: 0; font-size: 
   .side .box, .side .foot { display: none; }
   .nav { flex-direction: row; flex-wrap: wrap; }
   .tiles, .staff { grid-template-columns: repeat(2, 1fr); }
-  .form, .trio, .tasks, .tasks.n2 { grid-template-columns: 1fr; }
-  .cmd .grid { grid-template-columns: 1fr 1fr; }
+  .form, .tasks, .tasks.n2 { grid-template-columns: 1fr; }
+  .quad { grid-template-columns: 1fr 1fr; }
   .stepper { grid-template-columns: repeat(3, 1fr); }
   .stp { border-bottom: 1px solid var(--line); }
   .acc .body { padding-left: 18px; }
   .input-sum { grid-template-columns: 1fr; }
 }
-@media (max-width: 560px) { .tiles, .staff, .grid2, .grid3, .cmd .grid { grid-template-columns: 1fr; } h1 { font-size: 30px; } .row { grid-template-columns: 44px 1fr; } .row > .status { grid-column: 2; } }
+@media (max-width: 560px) { .tiles, .staff, .grid2, .grid3, .quad { grid-template-columns: 1fr; } h1 { font-size: 30px; } .row { grid-template-columns: 44px 1fr; } .row > .status { grid-column: 2; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

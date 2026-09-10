@@ -9,10 +9,10 @@ export interface ProjectRow {
 }
 export interface AnalysisRow {
   id: string; project_id: string; employee_id: string; status: string; headline: string | null; facts_json: string | null; hypotheses_json: string | null;
-  needed_data_json: string | null; findings_md: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
+  evidence_json: string | null; needed_data_json: string | null; findings_md: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 export interface DecisionRow {
-  id: string; project_id: string; version: number; summary_md: string; facts_json: string; hypotheses_json: string; needed_data_json: string; not_now_json: string;
+  id: string; project_id: string; version: number; summary_md: string; facts_json: string; hypotheses_json: string; evidence_json: string | null; needed_data_json: string; not_now_json: string;
   model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 export interface TaskRow {
@@ -93,10 +93,10 @@ export class Repo {
       .bind(newId(), projectId, employeeId, now())
       .run();
   }
-  async completeAnalysis(projectId: string, employeeId: string, d: { headline: string; facts: string[]; hypotheses: string[]; needed_data: string[]; findings_md: string; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
+  async completeAnalysis(projectId: string, employeeId: string, d: { headline: string; facts: string[]; hypotheses: string[]; evidence: unknown[]; needed_data: string[]; findings_md: string; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
     await this.db
-      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, needed_data_json = ?, findings_md = ?, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
-      .bind(d.headline, json(d.facts), json(d.hypotheses), json(d.needed_data), d.findings_md, d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
+      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, evidence_json = ?, needed_data_json = ?, findings_md = ?, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
+      .bind(d.headline, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.needed_data), d.findings_md, d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
       .run();
   }
   async failAnalysis(projectId: string, employeeId: string, message: string): Promise<void> {
@@ -118,13 +118,13 @@ export class Repo {
   }
 
   // ---------- 司令塔の判断 ----------
-  async createDecision(projectId: string, d: { summary_md: string; facts: string[]; hypotheses: string[]; needed_data: string[]; not_now: unknown[]; model: string; input_tokens: number; output_tokens: number }): Promise<DecisionRow> {
+  async createDecision(projectId: string, d: { summary_md: string; facts: string[]; hypotheses: string[]; evidence: unknown[]; needed_data: string[]; not_now: unknown[]; model: string; input_tokens: number; output_tokens: number }): Promise<DecisionRow> {
     const prev = await this.db.prepare("SELECT MAX(version) AS v FROM decisions WHERE project_id = ?").bind(projectId).first<{ v: number | null }>();
     const version = (prev?.v ?? 0) + 1;
     const id = newId();
     await this.db
-      .prepare("INSERT INTO decisions (id, project_id, version, summary_md, facts_json, hypotheses_json, needed_data_json, not_now_json, model, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, projectId, version, d.summary_md, json(d.facts), json(d.hypotheses), json(d.needed_data), json(d.not_now), d.model, d.input_tokens, d.output_tokens, now())
+      .prepare("INSERT INTO decisions (id, project_id, version, summary_md, facts_json, hypotheses_json, evidence_json, needed_data_json, not_now_json, model, input_tokens, output_tokens, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, projectId, version, d.summary_md, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.needed_data), json(d.not_now), d.model, d.input_tokens, d.output_tokens, now())
       .run();
     return (await this.db.prepare("SELECT * FROM decisions WHERE id = ?").bind(id).first<DecisionRow>())!;
   }

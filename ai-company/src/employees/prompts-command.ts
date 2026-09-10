@@ -35,6 +35,7 @@ kpis には施策ごとに 1〜2 個、測れる指標を提案する。baseline
 出力の決まり:
 - summary_md: 「今月の問題は何で、何に集中するか」を 150〜300 字で。見出しなし、段落 1〜2 つ。
 - facts / hypotheses / needed_data: それぞれ 2〜5 個。分析担当の結果から重要なものを選ぶ。
+- evidence: 判断の根拠となった数字を 2〜6 個（label / value / source）。分析担当が挙げた数字と入力の数字だけを使う。
 - not_now: 2〜4 個。item と reason。
 - tasks: 最大 3 個。rank は 1 から。impact_score は 1〜5、effort_hours は着手に必要な時間（人が動く時間の見積り）。`,
 };

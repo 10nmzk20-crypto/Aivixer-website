@@ -79,10 +79,11 @@ export function projectRoutes() {
         employee_name: names[a.employee_id] ?? a.employee_id,
         facts: a.facts_json ? JSON.parse(a.facts_json) : [],
         hypotheses: a.hypotheses_json ? JSON.parse(a.hypotheses_json) : [],
+        evidence: a.evidence_json ? JSON.parse(a.evidence_json) : [],
         needed_data: a.needed_data_json ? JSON.parse(a.needed_data_json) : [],
       })),
       decision: decision
-        ? { ...decision, facts: JSON.parse(decision.facts_json), hypotheses: JSON.parse(decision.hypotheses_json), needed_data: JSON.parse(decision.needed_data_json), not_now: JSON.parse(decision.not_now_json) }
+        ? { ...decision, facts: JSON.parse(decision.facts_json), hypotheses: JSON.parse(decision.hypotheses_json), evidence: decision.evidence_json ? JSON.parse(decision.evidence_json) : [], needed_data: JSON.parse(decision.needed_data_json), not_now: JSON.parse(decision.not_now_json) }
         : null,
       tasks: tasks.map((t) => ({ ...t, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, restricted_actions: JSON.parse(t.restricted_actions_json) })),
     });

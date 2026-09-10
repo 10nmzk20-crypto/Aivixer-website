@@ -1,18 +1,21 @@
-import { api, type Analysis, type Kpi, type ProjectBundle, type TaskFull } from "../api";
+import { api, type Analysis, type Evidence, type Kpi, type ProjectBundle, type TaskFull } from "../api";
 import { esc, fmtDate, fmtNum, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
 /** ③ 案件詳細: 進捗 → 入力 → 分析部 → 経営司令塔 → 最優先施策（成果物・承認・KPI） */
 const STEPS = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed"];
-const ANALYST_ORDER = ["data", "marketing", "customer", "sales", "web", "product", "profit", "competitor"];
-const ANALYST_NAMES: Record<string, string> = { data: "データ分析担当", marketing: "マーケ分析担当", customer: "顧客・継続分析担当", sales: "営業・入会分析担当", web: "Web・SEO 分析担当", product: "商品・料金分析担当", profit: "収益分析担当", competitor: "競合・市場分析担当" };
 let metricLabels: Record<string, string> | null = null;
+let analysts: Array<{ id: string; name: string }> | null = null;
 
 export async function renderProject(main: HTMLElement, params: Record<string, string>) {
   const id = params.id;
-  if (!metricLabels) {
-    const { metrics } = await api.get<{ metrics: Array<{ id: string; label: string; unit: string }> }>("/api/projects/metrics");
+  if (!metricLabels || !analysts) {
+    const [{ metrics }, { employees }] = await Promise.all([
+      api.get<{ metrics: Array<{ id: string; label: string; unit: string }> }>("/api/projects/metrics"),
+      api.get<{ employees: Array<{ id: string; name: string; department: string }> }>("/api/employees"),
+    ]);
     metricLabels = Object.fromEntries(metrics.map((m) => [m.id, `${m.label}（${m.unit}）`]));
+    analysts = employees.filter((e) => e.department === "analysis").map((e) => ({ id: e.id, name: e.name }));
   }
   let lastSig = "";
   let timer: number | undefined;
@@ -44,23 +47,20 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
   const nums = p.input_data ? Object.entries(p.input_data).map(([k, v]) => `<span>${esc(metricLabels?.[k] ?? k)} <b>${esc(typeof v === "number" ? fmtNum(v) : v)}</b></span>`).join("") : "";
   const selected = p.selected_analysts;
 
-  const analysisRows = ANALYST_ORDER.map((eid, i) => {
-    const a = b.analyses.find((x) => x.employee_id === eid);
+  const analysisRows = (analysts ?? []).map((emp, i) => {
+    const a = b.analyses.find((x) => x.employee_id === emp.id);
     const no = `<span class="no">${String(i + 1).padStart(2, "0")}</span>`;
     if (!a) {
-      if (!selected) return `<details class="skip"><summary>${no}<span class="nm">${esc(ANALYST_NAMES[eid])}<small>${p.status === "analyzing" ? "担当を選定中…" : "今回は不要"}</small></span><span></span></summary></details>`;
-      return `<details class="skip"><summary>${no}<span class="nm">${esc(ANALYST_NAMES[eid])}<small>今回は不要（司令塔の判断）</small></span><span></span></summary></details>`;
+      if (!selected) return `<details class="skip"><summary>${no}<span class="nm">${esc(emp.name)}<small>${p.status === "analyzing" ? "担当を選定中…" : "今回は不要"}</small></span><span></span></summary></details>`;
+      return `<details class="skip"><summary>${no}<span class="nm">${esc(emp.name)}<small>今回は不要（司令塔の判断）</small></span><span></span></summary></details>`;
     }
     return analysisBlock(a, no, b.analyses.filter((x) => x.status === "done").length === 1);
   }).join("");
 
   const d = b.decision;
   const commander = d
-    ? `<div class="cmd"><p class="lead">${esc(d.summary_md)}</p><div class="grid">
-        <div><h4>事実</h4><ul>${d.facts.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div><h4>仮説</h4><ul>${d.hypotheses.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div><h4>追加で必要なデータ</h4><ul>${d.needed_data.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>
-        <div><h4>今やらなくていいこと</h4><ul>${d.not_now.map((x) => `<li class="nn">${esc(x.item)}<small>${esc(x.reason)}</small></li>`).join("")}</ul></div></div></div>`
+    ? `<div class="cmd"><p class="lead">${esc(d.summary_md)}</p><div class="grid">${fourColumns(d.facts, d.hypotheses, d.evidence, d.needed_data)}</div>
+        <div class="notnow"><h4>今やらなくていいこと</h4><ul>${d.not_now.map((x) => `<li class="nn">${esc(x.item)}<small>${esc(x.reason)}</small></li>`).join("")}</ul></div></div>`
     : `<div class="cmd"><div class="placeholder" style="padding:6px 0">${p.status === "analyzing" ? "分析部の結果が揃うと、ここに「結局、今何をやるべきか」が表示されます。" : "司令塔の判断はありません。"}</div></div>`;
 
   const tasks = b.tasks.length
@@ -88,10 +88,17 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
 function analysisBlock(a: Analysis, no: string, open: boolean): string {
   if (a.status === "running") return `<details><summary>${no}<span class="nm">${esc(a.employee_name)}<small>分析中…</small></span>${statusChip("running", { running: "作業中" })}</summary></details>`;
   if (a.status === "failed") return `<details><summary>${no}<span class="nm">${esc(a.employee_name)}<small>失敗</small></span>${statusChip("failed")}</summary><div class="body"><p class="findings">${esc(a.findings_md ?? "")}</p></div></details>`;
-  const list = (xs: string[]) => xs.map((x) => `<li>${esc(x)}</li>`).join("");
   return `<details${open ? " open" : ""}><summary>${no}<span class="nm">${esc(a.employee_name)}<small>${esc(a.headline ?? "")}</small></span>${statusChip("completed")}</summary>
-    <div class="body"><p class="findings">${esc(a.findings_md ?? "")}</p><div class="trio">
-      <div><h4>事実</h4><ul>${list(a.facts)}</ul></div><div><h4>仮説</h4><ul>${list(a.hypotheses)}</ul></div><div><h4>追加で必要なデータ</h4><ul>${list(a.needed_data)}</ul></div></div></div></details>`;
+    <div class="body"><p class="findings">${esc(a.findings_md ?? "")}</p>${fourColumns(a.facts, a.hypotheses, a.evidence, a.needed_data)}</div></details>`;
+}
+
+/** 事実 / 仮説 / 根拠となった数字 / 追加で必要なデータ の 4 区分表示 */
+function fourColumns(facts: string[], hypotheses: string[], evidence: Evidence[], needed: string[]): string {
+  const list = (xs: string[]) => (xs.length ? `<ul>${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : '<p class="none">なし</p>');
+  const ev = evidence.length
+    ? `<table class="ev"><tbody>${evidence.map((e) => `<tr><td>${esc(e.label)}</td><td class="v">${esc(e.value)}</td><td class="s">${esc(e.source)}</td></tr>`).join("")}</tbody></table>`
+    : '<p class="none">なし</p>';
+  return `<div class="quad"><div><h4>事実</h4>${list(facts)}</div><div><h4>仮説</h4>${list(hypotheses)}</div><div><h4>根拠となった数字</h4>${ev}</div><div><h4>追加で必要なデータ</h4>${list(needed)}</div></div>`;
 }
 
 function taskCard(t: TaskFull, openVersions: Record<string, number>): string {

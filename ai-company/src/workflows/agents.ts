@@ -148,7 +148,8 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
   const report = analyses
     .map((a) => {
       const list = (s: string | null) => (JSON.parse(s ?? "[]") as string[]).map((x) => `  - ${x}`).join("\n");
-      return `■ ${employeeName(a.employee_id)}: ${a.headline}\n 事実:\n${list(a.facts_json)}\n 仮説:\n${list(a.hypotheses_json)}\n 追加で必要なデータ:\n${list(a.needed_data_json)}\n 所見:\n ${a.findings_md}`;
+      const evidence = (JSON.parse(a.evidence_json ?? "[]") as Array<{ label: string; value: string; source: string }>).map((e) => `  - ${e.label}: ${e.value}（${e.source}）`).join("\n");
+      return `■ ${employeeName(a.employee_id)}: ${a.headline}\n 事実:\n${list(a.facts_json)}\n 仮説:\n${list(a.hypotheses_json)}\n 根拠となった数字:\n${evidence}\n 追加で必要なデータ:\n${list(a.needed_data_json)}\n 所見:\n ${a.findings_md}`;
     })
     .join("\n\n");
   const executors = EXECUTOR_IDS.map((id) => `- ${id}: ${EMPLOYEE_MAP[id].name}`).join("\n");

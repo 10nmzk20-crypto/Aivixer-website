@@ -14,9 +14,11 @@ interface Options {
 export class AnthropicProvider implements AiProvider {
   readonly name = "anthropic";
   private client: Anthropic;
+  private opts: Options;
 
-  constructor(private opts: Options) {
-    // Workers では 1 リクエストの上限時間があるため、SDK 側の再試行は少なめにし、再試行は Workflow に任せる
+  constructor(opts: Options) {
+    this.opts = opts;
+    // SDK 側の再試行は少なめにし、再試行は Workflow に任せる。1 回の回答に数分かかることがあるので timeout は長め
     this.client = new Anthropic({ apiKey: opts.apiKey, maxRetries: 1, timeout: 10 * 60 * 1000 });
   }
 

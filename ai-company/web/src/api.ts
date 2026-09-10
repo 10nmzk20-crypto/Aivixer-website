@@ -36,8 +36,9 @@ export interface Output { id: string; task_id: string; employee_id: string; vers
 export interface Approval { id: string; decision: string; note: string | null; decided_by: string; decided_at: string }
 export interface Kpi { id: string; task_id: string; name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null; measure_by: string | null; confirmed: number; verdict: string | null; verdict_note: string | null; verified_at: string | null }
 export interface TaskFull extends Task { outputs: Output[]; approvals: Approval[]; kpis: Kpi[] }
-export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; headline: string | null; facts: string[]; hypotheses: string[]; needed_data: string[]; findings_md: string | null; model: string | null }
-export interface Decision { id: string; version: number; summary_md: string; facts: string[]; hypotheses: string[]; needed_data: string[]; not_now: Array<{ item: string; reason: string }>; created_at: string }
+export interface Evidence { label: string; value: string; source: string }
+export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; headline: string | null; facts: string[]; hypotheses: string[]; evidence: Evidence[]; needed_data: string[]; findings_md: string | null; model: string | null }
+export interface Decision { id: string; version: number; summary_md: string; facts: string[]; hypotheses: string[]; evidence: Evidence[]; needed_data: string[]; not_now: Array<{ item: string; reason: string }>; created_at: string }
 export interface Project {
   id: string; title: string; period_label: string | null; input_text: string; input_data: Record<string, string | number> | null; extra_text: string | null; analyst_mode: string;
   selected_analysts: string[] | null; selection_reason: string | null; status: string; error: string | null; created_at: string; updated_at: string;
