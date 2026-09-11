@@ -10,6 +10,36 @@ AI 社員 18 人（分析部 8・司令塔 1・実行部 6・検証部 3）は�
 - AI は文章・原稿・仕様書を作るだけです。HP 公開・広告出稿・SNS 投稿・LINE 送信・料金変更・会員データ変更は AI からは行えず、代表の承認と人の操作が必要です。
 - 設計の全体像は `../docs/AI_COMPANY_DESIGN.md` を参照してください。
 
+## 判断の基準：「小さく、強く、暇な会社」
+
+このアプリは、施策を「効果がありそうか」だけで選びません。**人の仕事が増えないか**も必ず見ます。基準は `src/principles.ts` の憲法 10 か条にまとめてあり、AI 社員のプロンプトにも ChatGPT 用レポートの冒頭にも同じ文が入ります。
+
+施策はすべて次の 3 つに分類されます。
+
+| 分類 | 意味 | 扱い |
+|---|---|---|
+| **A** | 一度作れば繰り返し働く（記事・FAQ・セルフメニューなど） | 最優先 |
+| **B** | 定期メンテナンスのみ必要 | 次点 |
+| **C** | 毎回人が動かなければ成立しない（個別 LINE・声かけなど） | 原則として優先度を下げる。「なぜ人手が必要か」の記載が必須 |
+
+あわせて **仕組みスコア** を計算します。計算はコードが行い、AI には計算させません。
+
+```
+（効果 × 資産性 × 自動化）÷（初期工数 + 継続工数 × 12 + 人的依存度 × 2 + 1）
+```
+
+スコアが大きいほど「人の仕事を増やさず、将来も働き続ける仕組み」です。施策案はこの順に並びます。
+
+さらにアプリ側で次を検算し、AI の自己申告を鵜呑みにしません。
+
+- 継続工数やスタッフ依存が高いのに A になっていれば、**B や C に自動で降格**し、理由を画面に出します
+- 「個別 LINE」「声かけ」「毎日投稿」などが含まれているのに C 以外なら、**注意文**を出します
+- ただし「声かけを増やす**より**〜」のように、その手法を否定している文は数えません
+
+施策カードには A/B/C バッジ、「人の仕事が増える / 減る」、スコアと計算式、工数と依存度の 7 項目が並びます。**人の仕事が増える施策は反転表示**になり、ひと目で分かります。
+
+動作確認: `npm run leverage:check`
+
 ## 構成
 
 | 役割 | 使うもの |
@@ -98,15 +128,19 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
 ai-company/
 ├── wrangler.jsonc         Worker / Static Assets / D1 / Workflows の設定
 ├── migrations/            D1 のテーブル定義と AI 社員の初期データ
+├── scripts/               動作確認用（ai-check / leverage-check）
 ├── web/                   画面（Vite + TypeScript）
 │   └── src/views/         dashboard / new-analysis / project / history / knowledge / employee / login
 └── src/                   Worker
-    ├── api/               API（auth, dashboard, employees, projects, tasks, knowledge）
+    ├── principles.ts      会社の憲法（全 AI 社員とレポートの最上位ルール）
+    ├── api/               API（auth, dashboard, employees, projects, tasks, knowledge, reports）
     ├── ai/                AI プロバイダ層（provider / anthropic / mock / schemas）
+    ├── analysis/          KPI 計算・前月比較・ファネル判定・仕組みスコア・数字の検算
+    ├── report/build.ts    ChatGPT 用レポートの組み立て
     ├── db/repo.ts         D1 の読み書き
-    ├── employees/         AI 社員 17 人の定義と役割プロンプト
+    ├── employees/         AI 社員 18 人の定義と役割プロンプト
     ├── policy/            承認が必須の行為の判定
-    └── workflows/         分析パイプライン / 修正パイプライン
+    └── workflows/         分析 / 実行 / 施策修正 / 成果物修正 / 検証 のパイプライン
 ```
 
 ## API 一覧

@@ -23,6 +23,11 @@ export interface TaskRow {
   executor_employee_id: string; assignment_reason: string; restricted_actions_json: string; status: string; due_date: string | null;
   what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
   plan_version: number; plan_change_note: string | null; production_error: string | null; adopted_at: string | null;
+  task_type: string | null; type_note: string | null; initial_hours: number | null; ongoing_hours: number | null;
+  automation_score: number | null; asset_score: number | null; self_service: number | null;
+  staff_dependency: number | null; owner_dependency: number | null;
+  human_work_change: string | null; human_work_note: string | null; manual_reason: string | null;
+  leverage_score: number | null; leverage_formula: string | null; leverage_warning: string | null;
   created_at: string; updated_at: string;
 }
 export interface OutputRow {
@@ -40,6 +45,25 @@ export interface VerificationRow {
   id: string; task_id: string; version: number; achievement: string; achievement_reason: string; effect_likelihood: string; other_factors: string;
   recommendation: string; recommendation_reason: string; next_step: string; lesson: string; next_time: string; kpis_snapshot_json: string;
   model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
+}
+
+/** 施策の「人のエネルギー」に関する評価。コードで計算した結果も含む */
+export interface LeverageFields {
+  task_type: string;
+  type_note: string | null;
+  initial_hours: number;
+  ongoing_hours: number;
+  automation_score: number;
+  asset_score: number;
+  self_service: number;
+  staff_dependency: number;
+  owner_dependency: number;
+  human_work_change: string;
+  human_work_note: string;
+  manual_reason: string | null;
+  leverage_score: number;
+  leverage_formula: string;
+  leverage_warning: string | null;
 }
 
 export const PROJECT_STATUSES = ["analyzing", "ready_for_report", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
@@ -166,12 +190,29 @@ export class Repo {
   }
 
   // ---------- 施策（タスク） ----------
-  async createTask(d: { project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number; executor_employee_id: string; assignment_reason: string; restricted_actions: string[]; due_date: string | null; what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null }): Promise<TaskRow> {
+  async createTask(d: {
+    project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string;
+    impact_score: number; effort_hours: number; executor_employee_id: string; assignment_reason: string;
+    restricted_actions: string[]; due_date: string | null; what_to_do: string | null; human_owner: string | null;
+    duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
+    leverage: LeverageFields;
+  }): Promise<TaskRow> {
     const id = newId();
     const t = now();
+    const g = d.leverage;
     await this.db
-      .prepare("INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, what_to_do, human_owner, duration_days, difficulty, cost_estimate, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, d.project_id, d.decision_id, d.rank, d.title, d.objective, d.reasoning, d.impact_score, d.effort_hours, d.executor_employee_id, d.assignment_reason, json(d.restricted_actions), d.due_date, d.what_to_do, d.human_owner, d.duration_days, d.difficulty, d.cost_estimate, t, t)
+      .prepare(
+        "INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, what_to_do, human_owner, duration_days, difficulty, cost_estimate, task_type, type_note, initial_hours, ongoing_hours, automation_score, asset_score, self_service, staff_dependency, owner_dependency, human_work_change, human_work_note, manual_reason, leverage_score, leverage_formula, leverage_warning, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .bind(
+        id, d.project_id, d.decision_id, d.rank, d.title, d.objective, d.reasoning, d.impact_score, d.effort_hours,
+        d.executor_employee_id, d.assignment_reason, json(d.restricted_actions), d.due_date, d.what_to_do, d.human_owner,
+        d.duration_days, d.difficulty, d.cost_estimate,
+        g.task_type, g.type_note, g.initial_hours, g.ongoing_hours, g.automation_score, g.asset_score, g.self_service,
+        g.staff_dependency, g.owner_dependency, g.human_work_change, g.human_work_note, g.manual_reason,
+        g.leverage_score, g.leverage_formula, g.leverage_warning,
+        t, t,
+      )
       .run();
     return (await this.getTask(id))!;
   }
@@ -304,6 +345,15 @@ export class Repo {
     const r = await this.db
       .prepare("SELECT t.*, p.title AS project_title FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.project_id != ? AND t.status IN ('completed','in_progress','awaiting_verification','producing','rejected') ORDER BY t.updated_at DESC LIMIT ?")
       .bind(excludeProjectId, limit)
+      .all<TaskRow & { project_title: string }>();
+    return r.results;
+  }
+
+  /** 実行中・検証待ちの施策。いま追いかけている KPI を出すため、今回の案件も含める */
+  async listActiveTasksForReport(limit = 12): Promise<Array<TaskRow & { project_title: string }>> {
+    const r = await this.db
+      .prepare("SELECT t.*, p.title AS project_title FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.status IN ('in_progress','awaiting_verification','producing') ORDER BY t.updated_at DESC LIMIT ?")
+      .bind(limit)
       .all<TaskRow & { project_title: string }>();
     return r.results;
   }

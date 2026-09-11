@@ -1,5 +1,5 @@
 import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type Report, type RosterEntry, type TaskFull, type Verification } from "../api";
-import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
+import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, HUMAN_WORK_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, TASK_TYPE_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
 /** ③ 案件詳細: 進捗 → 入力 → 分析部 → 経営司令塔 → 最優先施策（成果物・承認・KPI） */
@@ -272,7 +272,6 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   const latest = t.outputs[t.outputs.length - 1];
   const ver = openVersions[t.id] ?? latest?.version;
   const out = t.outputs.find((o) => o.version === ver) ?? latest;
-  const ratio = (t.impact_score / Math.max(0.5, t.effort_hours)).toFixed(2);
   const chip = t.status === "completed" && t.kpis[0]?.verdict ? `<span class="badge">${esc(VERDICT_JA[t.kpis[0].verdict] ?? "")}</span>` : statusChip(t.status);
 
   // 成果物は「採用」後に実行担当 AI が作る。承認前は施策案だけを見せる
@@ -347,14 +346,47 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
 
   return `<div class="task" data-task-card="${t.id}"><div class="tp"><div class="top"><span class="rk">${t.rank}</span>${chip}</div><h3>${esc(t.title)}</h3><p class="ob">目的: ${esc(t.objective)}</p>
     ${t.what_to_do ? `<p class="todo">${esc(t.what_to_do)}</p>` : ""}
+    ${leverageBlock(t)}
     <dl class="kv">
       <dt>担当 AI</dt><dd><b><button type="button" data-employee="${esc(t.executor_employee_id)}">${esc(t.executor_name)}</button></b> — ${esc(t.assignment_reason)}</dd>
       <dt>人間側</dt><dd>${esc(t.human_owner ?? "代表")}</dd>
       <dt>期限</dt><dd>${t.duration_days ? `${t.duration_days} 日` : "—"}${t.due_date ? `（${esc(t.due_date)} まで）` : ""}</dd>
-      <dt>評価</dt><dd class="score">インパクト ${t.impact_score}/5 · 難易度 ${t.difficulty ?? "—"}/5 · 時間 ${t.effort_hours} h · コスト ${esc(t.cost_estimate ?? "不明")} · 比 ${ratio}</dd>
+      <dt>評価</dt><dd class="score">効果 ${t.impact_score}/5 · 難易度 ${t.difficulty ?? "—"}/5 · コスト ${esc(t.cost_estimate ?? "不明")}</dd>
       <dt>優先理由</dt><dd>${esc(t.reasoning)}</dd>
       ${t.plan_version > 1 ? `<dt>施策案</dt><dd>第 ${t.plan_version} 版${t.plan_change_note ? ` — ${esc(t.plan_change_note)}` : ""}</dd>` : ""}</dl>
     ${t.restricted_actions.length ? `<span class="flag">代表承認が必要: ${t.restricted_actions.map((r) => esc(RESTRICTED_JA[r] ?? r)).join("・")}</span>` : ""}</div>${body}${kpi}${act}</div>`;
+}
+
+/**
+ * 施策が「人の仕事を増やさず、将来も働き続ける仕組みか」を見せる。
+ * A/B/C の分類、初期工数と継続工数、人の仕事の増減、そして憲法に照らした注意。
+ */
+function leverageBlock(t: TaskFull): string {
+  const g = t.leverage;
+  if (!g || !g.type) return "";
+  const hw = g.human_work_change ?? "same";
+  const bar = (n: number | null | undefined) => (n === null || n === undefined ? "—" : `${n}/5`);
+  return `<div class="lev" data-type="${esc(g.type)}" data-hw="${esc(hw)}">
+    <div class="lev-top">
+      <span class="lev-type">${esc(g.type)}</span>
+      <span class="lev-type-label">${esc(TASK_TYPE_JA[g.type] ?? "")}</span>
+      <span class="lev-hw">${esc(HUMAN_WORK_JA[hw] ?? "")}</span>
+      ${g.score !== null && g.score !== undefined ? `<span class="lev-score" title="${esc(g.formula ?? "")}">仕組みスコア ${g.score}</span>` : ""}
+    </div>
+    ${g.human_work_note ? `<p class="lev-note">${esc(g.human_work_note)}</p>` : ""}
+    <dl class="lev-grid">
+      <div><dt>初期工数</dt><dd>${g.initial_hours ?? "—"} h</dd></div>
+      <div><dt>継続工数</dt><dd>${g.ongoing_hours ?? "—"} h/月</dd></div>
+      <div><dt>資産性</dt><dd>${bar(g.asset)}</dd></div>
+      <div><dt>自動化</dt><dd>${bar(g.automation)}</dd></div>
+      <div><dt>自己解決</dt><dd>${bar(g.self_service)}</dd></div>
+      <div><dt>スタッフ依存</dt><dd>${bar(g.staff_dependency)}</dd></div>
+      <div><dt>代表依存</dt><dd>${bar(g.owner_dependency)}</dd></div>
+    </dl>
+    ${g.manual_reason ? `<p class="lev-manual">人手が必要な理由: ${esc(g.manual_reason)}</p>` : ""}
+    ${g.type_note ? `<p class="lev-warn">${esc(g.type_note)}</p>` : ""}
+    ${g.warning ? `<p class="lev-warn">${esc(g.warning)}</p>` : ""}
+  </div>`;
 }
 
 /** KPI 検証担当の判定結果 */

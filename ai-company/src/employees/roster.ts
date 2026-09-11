@@ -40,18 +40,18 @@ const ANALYSTS: Array<[string, string]> = [
 ];
 
 const EXECUTORS: Array<[string, string, string]> = [
-  ["planner", "企画設計担当", "plan"],
-  ["content", "コンテンツ制作担当", "content"],
+  ["planner", "仕組み設計担当", "plan"],
+  ["content", "資産コンテンツ担当", "content"],
   ["webdev", "Web 実装担当", "web_spec"],
-  ["growth", "集客実行担当", "growth_plan"],
-  ["line", "LINE・営業担当", "line_script"],
-  ["retention", "会員継続担当", "retention_plan"],
+  ["growth", "資産型集客担当", "growth_plan"],
+  ["line", "摩擦削減担当", "line_script"],
+  ["retention", "セルフ利用設計担当", "retention_plan"],
 ];
 
 /** 検証部。施策の結果を確かめ、直し、残す */
 const VERIFIERS: Array<[string, string, string]> = [
   ["kpi", "KPI 検証担当", "kpi_review"],
-  ["improve", "改善担当", "improve_plan"],
+  ["improve", "自動化・改善担当", "improve_plan"],
   ["knowledge", "ナレッジ担当", "knowledge_note"],
 ];
 

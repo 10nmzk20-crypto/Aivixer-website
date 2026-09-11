@@ -17,6 +17,12 @@ export const RESTRICTED_JA: Record<string, string> = {
 export const KNOWLEDGE_KIND_JA: Record<string, string> = { success: "成功", failure: "失敗", idea: "却下・案", analysis: "分析", learning: "学び" };
 export const OUTCOME_JA: Record<string, string> = { success: "成功", failure: "失敗", hold: "保留" };
 export const FUNNEL_STATUS_JA: Record<string, string> = { good: "良好", watch: "注意", problem: "問題あり", no_data: "データ不足" };
+export const TASK_TYPE_JA: Record<string, string> = {
+  A: "一度作れば繰り返し働く",
+  B: "定期メンテナンスのみ必要",
+  C: "毎回人が動かないと成立しない",
+};
+export const HUMAN_WORK_JA: Record<string, string> = { decrease: "人の仕事が減る", same: "人の仕事は変わらない", increase: "人の仕事が増える" };
 export const VERDICT_JA: Record<string, string> = { continue: "続行", improve: "改善して再実施", stop: "中止" };
 export const ACHIEVEMENT_JA: Record<string, string> = { achieved: "達成", partial: "一部達成", missed: "未達" };
 

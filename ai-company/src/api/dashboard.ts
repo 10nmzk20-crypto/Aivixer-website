@@ -45,7 +45,12 @@ export function dashboardRoutes() {
       },
       running_project: runningProject ? { id: runningProject.id, title: runningProject.title, status: runningProject.status } : null,
       latest_project: latest ? { id: latest.id, title: latest.title, status: latest.status, created_at: latest.created_at } : null,
-      priorities: priorities.map((t) => ({ ...t, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, restricted_actions: JSON.parse(t.restricted_actions_json) })),
+      priorities: priorities.map((t) => ({
+        ...t,
+        executor_name: names[t.executor_employee_id] ?? t.executor_employee_id,
+        restricted_actions: JSON.parse(t.restricted_actions_json),
+        leverage: { type: t.task_type ?? null, score: t.leverage_score, human_work_change: t.human_work_change },
+      })),
       active_tasks: activeTasks
         .filter((t) => t.status === "in_progress" || t.status === "awaiting_verification" || t.status === "verifying")
         .map((t) => ({ id: t.id, project_id: t.project_id, project_title: t.project_title, title: t.title, status: t.status, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, due_date: t.due_date, human_owner: t.human_owner })),

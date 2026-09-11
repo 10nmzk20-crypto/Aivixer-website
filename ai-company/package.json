@@ -12,7 +12,8 @@
     "db:migrate:local": "wrangler d1 migrations apply vixer-ai-company-db --local",
     "db:migrate": "wrangler d1 migrations apply vixer-ai-company-db --remote",
     "cf-typegen": "wrangler types",
-    "ai:check": "tsx scripts/ai-check.ts"
+    "ai:check": "tsx scripts/ai-check.ts",
+    "leverage:check": "tsx scripts/leverage-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

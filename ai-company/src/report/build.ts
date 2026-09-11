@@ -3,6 +3,7 @@ import { METRIC_GROUPS, SOURCE_LABEL, normalizeInputData, type NormalizedInput }
 import { bookingShares, channelShares, computeDerived, totalBookings, totalJoins, type DerivedKpi } from "../analysis/derived";
 import type { ComparisonResult } from "../analysis/compare";
 import { FUNNEL_STATUS_JA, type FunnelResult } from "../analysis/funnel";
+import { PRINCIPLES_FOR_REPORT, VISION } from "../principles";
 
 /**
  * ChatGPT に貼り付けるレポートを組み立てる。
@@ -35,6 +36,8 @@ export interface ReportSources {
   funnel: FunnelResult | null;
   /** 過去に実施した施策（完了・実行中・却下） */
   pastTasks: Array<TaskRow & { project_title: string; kpis: KpiRow[] }>;
+  /** 実行中・検証待ちの施策（今回の案件も含む） */
+  activeTasks: Array<TaskRow & { project_title: string; kpis: KpiRow[] }>;
   /** ナレッジ（成功・失敗・学び） */
   knowledge: KnowledgeRow[];
 }
@@ -58,6 +61,7 @@ export function buildReport(src: ReportSources): string {
 
   // ---------- 見出し ----------
   L.push("# Life Design ViXer 経営データ", "");
+  L.push("## 0. 判断の前提（ViXer の方針）", "", PRINCIPLES_FOR_REPORT, "");
   line("対象期間", project.period_label || NA);
   line("案件名", project.title);
   line("作成日", new Date().toISOString().slice(0, 10));
@@ -215,7 +219,9 @@ export function buildReport(src: ReportSources): string {
       const k = t.kpis
         .map((x) => `${x.name}: 施策前 ${num(x.baseline_value)} → 目標 ${num(x.target_value)} → 実績 ${num(x.actual_value)}${x.verdict ? ` / 判断 ${{ continue: "続行", improve: "改善して再実施", stop: "中止" }[x.verdict] ?? x.verdict}` : ""}`)
         .join(" / ");
-      L.push(`- [${statusJa[t.status] ?? t.status}] ${t.title}（${t.project_title} / ${t.updated_at.slice(0, 10)}）`);
+      const type = t.task_type ? `[${t.task_type}] ` : "";
+      L.push(`- [${statusJa[t.status] ?? t.status}] ${type}${t.title}（${t.project_title} / ${t.updated_at.slice(0, 10)}）`);
+      if (t.human_work_note) L.push(`    人の仕事: ${t.human_work_note}`);
       if (t.what_to_do) L.push(`    内容: ${t.what_to_do.replace(/\n/g, " ").slice(0, 200)}`);
       L.push(`    KPI: ${k || NA}`);
     }
@@ -238,7 +244,7 @@ export function buildReport(src: ReportSources): string {
 
   // ---------- 現在の KPI 目標 ----------
   L.push("## 15. 現在追いかけている KPI（実行中・検証待ちの施策）", "");
-  const active = src.pastTasks.filter((t) => t.status === "in_progress" || t.status === "awaiting_verification" || t.status === "producing");
+  const active = src.activeTasks;
   if (active.length === 0) L.push(NA);
   else {
     for (const t of active) {
@@ -276,19 +282,36 @@ export const INSTRUCTION = `---
 
 このデータをLife Design ViXerの経営補佐として分析してください。
 
-事実と仮説を明確に分けて、
+ViXerは、
+『${VISION}』
+を目指しています。
 
-①現状
-②最大の問題
-③原因仮説
-④不足しているデータ
-⑤最優先施策3つ以内
-⑥今やらなくていいこと
+そのため、
+・人の声かけを増やさない
+・個別LINEを増やさない
+・毎日投稿を前提にしない
+・スタッフ業務を増やさない
+・代表の判断量を増やさない
+・一度作れば繰り返し働く仕組みを優先
+・自動化できるものを優先
+・会員が自己解決できる仕組みを優先
+・資産として積み上がる施策を優先
+
+という条件で分析してください。
+
+最終的に、
+①最大の問題
+②原因仮説
+③仕組みで解決する最優先施策3つ以内
+④各施策のA/B/C分類
+⑤人間の仕事が増えるか減るか
+⑥今やらないこと
 ⑦次回確認するKPI
-⑧必要なら担当AI社員
-⑨具体的な実行案
-
 を出してください。
 
-施策は『インパクト ÷ 必要時間』を重視して優先順位を決めてください。
+A: 一度作れば繰り返し働く
+B: 定期メンテナンスのみ必要
+C: 毎回人が動かなければ成立しない
+
+一般的な『LINEで声かけ』『SNS投稿を増やす』『営業トーク改善』を安易に第一提案にしないでください。
 入力されていない数字を事実として補完しないでください。`;

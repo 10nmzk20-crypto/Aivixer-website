@@ -373,3 +373,28 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 .report-history .hrow:hover { background: var(--surface-2); }
 .report-history .hrow.on { background: var(--surface-2); color: var(--text); }
 @media (max-width: 560px) { .report-history .hrow { grid-template-columns: 1fr 1fr; } textarea.report-text { min-height: 300px; } }
+
+/* ---------- 施策の「人のエネルギー」評価 ---------- */
+.lev { margin-top: 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); padding: 10px 12px; }
+.lev[data-type="A"] { border-color: var(--accent); }
+.lev[data-type="C"] { border-style: dashed; }
+.lev-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lev-type { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 2px; border: 1px solid var(--line-strong); font-family: var(--mono); font-size: 12px; flex: none; }
+.lev[data-type="A"] .lev-type { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.lev-type-label { font-size: 12px; color: var(--text-2); }
+.lev-hw { font-size: 11px; letter-spacing: .08em; border: 1px solid var(--line-strong); border-radius: 2px; padding: 2px 8px; color: var(--muted); white-space: nowrap; }
+.lev[data-hw="decrease"] .lev-hw { border-color: var(--text); color: var(--text); }
+.lev[data-hw="increase"] .lev-hw { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.lev-score { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: help; }
+.lev-note { margin: 8px 0 0; font-size: 12px; color: var(--text-2); }
+/* 施策カードは 3 列に並ぶため、画面幅ではなくカード自身の幅で列数を決める。
+   狭いときは「項目名 / 値」の 1 行表示に落ちて、文字が 1 文字ずつ折り返されないようにする */
+.lev-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px 12px; margin: 10px 0 0; font-size: 11px; }
+.lev-grid div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.lev-grid dt { color: var(--faint); letter-spacing: .04em; white-space: nowrap; }
+.lev-grid dd { margin: 0; font-family: var(--mono); color: var(--text-2); white-space: nowrap; }
+.lev-manual { margin: 8px 0 0; font-size: 12px; color: var(--text-2); border-left: 1px solid var(--line-strong); padding-left: 10px; }
+.lev-warn { margin: 8px 0 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 2px; font-size: 11px; color: var(--text); }
+.tbadge { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--mono); font-size: 11px; color: var(--muted); vertical-align: 1px; }
+.tbadge[data-type="A"] { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+@media (max-width: 560px) { .lev-score { margin-left: 0; } }

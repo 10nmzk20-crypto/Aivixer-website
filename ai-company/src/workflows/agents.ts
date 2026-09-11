@@ -2,10 +2,13 @@ import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../env";
 import { Repo, type ProjectRow, type TaskRow } from "../db/repo";
 import { AiProviderError, getProvider, isAiDisabled, type AiProvider } from "../ai/provider";
-import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema } from "../ai/schemas";
+import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema, type TaskProposal } from "../ai/schemas";
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
 import { detectRestrictedActions } from "../policy/restricted-actions";
+import { PRINCIPLES_PROMPT } from "../principles";
+import { checkType, computeLeverage, leverageWarning } from "../analysis/leverage";
+import type { LeverageFields } from "../db/repo";
 import { METRIC_GROUPS, SOURCE_LABEL, metricLabel, normalizeInputData, type NormalizedInput } from "../metrics";
 import { computeDerived, totalBookings, type DerivedKpi } from "../analysis/derived";
 import type { ComparisonResult } from "../analysis/compare";
@@ -22,7 +25,8 @@ const MAX_ANALYSTS = 4;
 function system(employeeId: string, override?: string): string {
   const def = EMPLOYEE_MAP[employeeId];
   if (!def) throw new NonRetryableError(`AI 社員が見つかりません: ${employeeId}`);
-  return `${COMPANY_CONTEXT}\n\n${override ?? def.systemPrompt}`;
+  // 憲法 → 会社の前提 → その社員の役割、の順に読ませる
+  return `${PRINCIPLES_PROMPT}\n\n${COMPANY_CONTEXT}\n\n${override ?? def.systemPrompt}`;
 }
 
 /**
@@ -309,7 +313,12 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
     output_tokens: usage.outputTokens,
   });
   const ids: string[] = [];
-  const proposals = [...data.tasks].sort((a, b) => a.rank - b.rank).slice(0, 3);
+  // 仕組みスコア（人の仕事を増やさず将来も働き続けるか）の高い順に並べ替える
+  const proposals = [...data.tasks]
+    .map((p) => ({ p, score: leverageOf(p).leverage_score }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map((x) => x.p);
   for (const [i, p] of proposals.entries()) {
     const executor = EXECUTOR_IDS.includes(p.executor_employee_id) ? p.executor_employee_id : "planner";
     const task = await repo.createTask({
@@ -320,7 +329,7 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
       objective: p.objective,
       reasoning: p.priority_reason,
       impact_score: clamp(Math.round(p.impact_score), 1, 5),
-      effort_hours: Math.max(0.5, Number(p.effort_hours) || 1),
+      effort_hours: Math.max(0.5, Number(p.initial_hours) || 1),
       executor_employee_id: executor,
       assignment_reason: p.assignment_reason,
       restricted_actions: detectRestrictedActions(`${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`, p.restricted_actions),
@@ -330,6 +339,7 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
       duration_days: clamp(Math.round(p.duration_days), 1, 365),
       difficulty: clamp(Math.round(p.difficulty), 1, 5),
       cost_estimate: p.cost_estimate,
+      leverage: leverageOf(p),
     });
     if (p.kpis.length) await repo.replaceKpis(task.id, p.kpis.slice(0, 3), false);
     ids.push(task.id);
@@ -437,10 +447,11 @@ export async function revisePlan(env: Env, taskId: string, note: string): Promis
       what_to_do: p.what_to_do,
       human_owner: p.human_owner,
       duration_days: clamp(Math.round(p.duration_days), 1, 365),
-      effort_hours: Math.max(0.5, Number(p.effort_hours) || 1),
+      effort_hours: Math.max(0.5, Number(p.initial_hours) || 1),
       impact_score: clamp(Math.round(p.impact_score), 1, 5),
       difficulty: clamp(Math.round(p.difficulty), 1, 5),
       cost_estimate: p.cost_estimate,
+      ...leverageOf(p),
       executor_employee_id: executor,
       assignment_reason: p.assignment_reason,
       restricted_actions_json: JSON.stringify(detectRestrictedActions(`${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`, p.restricted_actions)),
@@ -526,6 +537,42 @@ export async function markProjectFailed(env: Env, projectId: string, message: st
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number.isFinite(v) ? v : lo));
+
+/**
+ * 司令塔の提案から、施策の「人のエネルギー」評価を作る。
+ * スコアと分類の補正はコードで行い、AI の申告をそのまま信じない。
+ */
+function leverageOf(p: TaskProposal): LeverageFields {
+  const input = {
+    impact: clamp(Math.round(p.impact_score), 1, 5),
+    asset: clamp(Math.round(p.asset_score), 1, 5),
+    automation: clamp(Math.round(p.automation_score), 1, 5),
+    initialHours: Math.max(0, Number(p.initial_hours) || 0),
+    ongoingHoursPerMonth: Math.max(0, Number(p.ongoing_hours) || 0),
+    staffDependency: clamp(Math.round(p.staff_dependency), 1, 5),
+    ownerDependency: clamp(Math.round(p.owner_dependency), 1, 5),
+  };
+  const { type, note } = checkType(p.task_type, input);
+  const result = computeLeverage(input);
+  const text = `${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`;
+  return {
+    task_type: type,
+    type_note: note,
+    initial_hours: input.initialHours,
+    ongoing_hours: input.ongoingHoursPerMonth,
+    automation_score: input.automation,
+    asset_score: input.asset,
+    self_service: clamp(Math.round(p.self_service), 1, 5),
+    staff_dependency: input.staffDependency,
+    owner_dependency: input.ownerDependency,
+    human_work_change: p.human_work_change,
+    human_work_note: p.human_work_note,
+    manual_reason: p.manual_reason?.trim() || null,
+    leverage_score: result.score,
+    leverage_formula: result.formula,
+    leverage_warning: leverageWarning({ type, text, manualReason: p.manual_reason?.trim() || null, ongoingHoursPerMonth: input.ongoingHoursPerMonth }),
+  };
+}
 const dueDate = (days: number) => {
   const d = new Date();
   d.setDate(d.getDate() + clamp(Math.round(days), 1, 365));

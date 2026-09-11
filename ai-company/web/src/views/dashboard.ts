@@ -1,5 +1,5 @@
 import { api, type Dashboard, type Employee } from "../api";
-import { esc, fmtDate, PROJECT_STATUS_JA, RESTRICTED_JA, statusChip } from "../components";
+import { esc, fmtDate, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_TYPE_JA, statusChip } from "../components";
 
 /** ① ダッシュボード: 今日の状況 → 新しい分析 → 今日の最優先 → AI 社員 */
 export async function renderDashboard(main: HTMLElement) {
@@ -14,7 +14,7 @@ export async function renderDashboard(main: HTMLElement) {
   const prio = d.priorities.length
     ? d.priorities
         .map(
-          (t) => `<a class="row" href="#/projects/${t.project_id}"><span class="rk">${t.rank}</span><span><span class="t">${esc(t.title)}</span><span class="m">担当 <b>${esc(t.executor_name)}</b> · インパクト ${t.impact_score} / ${t.effort_hours} 時間${t.restricted_actions.length ? ` · 代表承認が必要: ${t.restricted_actions.map((r) => RESTRICTED_JA[r] ?? r).join("・")}` : ""}</span></span>${statusChip(t.status)}</a>`,
+          (t) => `<a class="row" href="#/projects/${t.project_id}"><span class="rk">${t.rank}</span><span><span class="t">${t.leverage?.type ? `<span class="tbadge" data-type="${esc(t.leverage.type)}" title="${esc(TASK_TYPE_JA[t.leverage.type] ?? "")}">${esc(t.leverage.type)}</span>` : ""}${esc(t.title)}</span><span class="m">担当 <b>${esc(t.executor_name)}</b> · 効果 ${t.impact_score}/5${t.leverage?.score !== null && t.leverage?.score !== undefined ? ` · 仕組みスコア ${t.leverage.score}` : ""}${t.leverage?.human_work_change === "increase" ? " · 人の仕事が増えます" : ""}${t.restricted_actions.length ? ` · 代表承認が必要: ${t.restricted_actions.map((r) => RESTRICTED_JA[r] ?? r).join("・")}` : ""}</span></span>${statusChip(t.status)}</a>`,
         )
         .join("")
     : `<div class="row"><span class="rk">—</span><span class="empty">${d.running_project ? "分析中です。完了すると最優先施策がここに表示されます。" : "まだ案件がありません。「新しい分析を開始」から始めてください。"}</span><span></span></div>`;

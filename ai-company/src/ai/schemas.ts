@@ -51,11 +51,24 @@ export const TaskProposalSchema = z.object({
   assignment_reason: z.string().describe("その AI 社員を選んだ理由"),
   human_owner: z.string().describe("人間側の担当（例: 代表 / 受付スタッフ / トレーナー）"),
   duration_days: z.number().int().describe("期限（着手から何日で完了・計測するか）"),
-  effort_hours: z.number().describe("必要作業時間（人が動く時間の見積り）"),
-  impact_score: z.number().int().describe("インパクト 1〜5"),
+
+  // ---- 憲法に基づく評価（人のエネルギーを増やさないか） ----
+  task_type: z.enum(["A", "B", "C"]).describe("A: 一度作れば繰り返し働く / B: 定期メンテナンスのみ / C: 毎回人が動かないと成立しない"),
+  initial_hours: z.number().describe("初期工数（作り上げるまでに人が使う時間）"),
+  ongoing_hours: z.number().describe("継続工数（作ったあと、毎月人が使う時間。ゼロなら 0）"),
+  impact_score: z.number().int().describe("期待効果 1〜5"),
+  asset_score: z.number().int().describe("資産性 1〜5（作ったものが残り、後から何度も働くか）"),
+  automation_score: z.number().int().describe("自動化可能性 1〜5"),
+  self_service: z.number().int().describe("会員の自己解決度 1〜5（会員がスタッフに聞かずに済むか）"),
+  staff_dependency: z.number().int().describe("スタッフ依存度 1〜5（高いほど、スタッフが毎回動く必要がある）"),
+  owner_dependency: z.number().int().describe("代表依存度 1〜5（高いほど、代表の判断が毎回必要）"),
+  human_work_change: z.enum(["decrease", "same", "increase"]).describe("この施策で人間の仕事は 減る / 変わらない / 増える のどれか"),
+  human_work_note: z.string().describe("人間の仕事がどう変わるかの説明（誰の何の作業が減る・増えるか）"),
+  manual_reason: z.string().nullable().describe("C に分類した場合、なぜ人手が必要で、なぜ仕組み化できないかの説明。A・B なら null"),
+
   difficulty: z.number().int().describe("実行難易度 1（簡単）〜5（難しい）"),
   cost_estimate: z.string().describe("必要コスト（例: 0 円 / 約 5,000 円 / 不明）"),
-  priority_reason: z.string().describe("なぜこの優先順位か（インパクト・時間・難易度・コスト・現在の課題から）"),
+  priority_reason: z.string().describe("なぜこの優先順位か。効果だけでなく、人の仕事を増やさないか・将来も働き続けるかを含めて書く"),
   restricted_actions: z.array(z.string()).describe("代表承認が必要な操作の id（publish_hp / run_ads / post_sns / send_line / change_price / edit_member_data）"),
   kpis: z.array(KpiProposalSchema).describe("KPI 1〜2 個"),
 });
@@ -69,7 +82,7 @@ export const TaskRevisionSchema = z.object({
 export type TaskRevisionResult = z.infer<typeof TaskRevisionSchema>;
 
 export const SynthesisSchema = z.object({
-  top_issue: z.string().describe("【今月の最重要課題】1〜2 文"),
+  top_issue: z.string().describe("【今の最大の問題】1〜2 文"),
   reasoning: z.string().describe("【そう判断した理由】分析担当の結果と数字を根拠に 3〜6 文"),
   evidence: z.array(EvidenceSchema).describe("判断の根拠となった数字"),
   tasks: z.array(TaskProposalSchema).describe("【今やること】最大 3 つ"),

@@ -3,9 +3,13 @@ import type { Env } from "../env";
 import { Repo } from "../db/repo";
 import { EMPLOYEE_MAP } from "../employees/roster";
 import { EMPLOYEE_GUIDES } from "../employees/guides";
+import { DISCOURAGED_PATTERNS, GOAL_STATES, PREFERRED_DIRECTIONS, PRINCIPLES, TASK_TYPES, VISION } from "../principles";
 
 export function employeeRoutes() {
   const r = new Hono<{ Bindings: Env }>();
+
+  /** 憲法（全社員の最上位ルール）。画面で確認できるようにする */
+  r.get("/principles", (c) => c.json({ vision: VISION, goals: GOAL_STATES, principles: PRINCIPLES, types: TASK_TYPES, discouraged: DISCOURAGED_PATTERNS.map((d) => d.label), preferred: PREFERRED_DIRECTIONS }));
 
   r.get("/employees", async (c) => {
     const repo = new Repo(c.env.DB);

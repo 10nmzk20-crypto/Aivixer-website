@@ -30,10 +30,11 @@ export function reportRoutes() {
     const funnel = diagnoseFunnel(input, comparison);
     await repo.updateProject(project.id, { derived_json: JSON.stringify(derived), funnel_json: JSON.stringify(funnel), period_key: periodKey });
 
-    const [pastTasks, knowledge] = await Promise.all([repo.listPastTasksForReport(project.id, 12), repo.listKnowledge({ limit: 15 })]);
+    const [pastTasks, activeTasks, knowledge] = await Promise.all([repo.listPastTasksForReport(project.id, 12), repo.listActiveTasksForReport(12), repo.listKnowledge({ limit: 15 })]);
     const withKpis = await Promise.all(pastTasks.map(async (t) => ({ ...t, kpis: await repo.listKpis(t.id) })));
+    const activeWithKpis = await Promise.all(activeTasks.map(async (t) => ({ ...t, kpis: await repo.listKpis(t.id) })));
 
-    const content = buildReport({ project, derived, funnel, pastTasks: withKpis, knowledge });
+    const content = buildReport({ project, derived, funnel, pastTasks: withKpis, activeTasks: activeWithKpis, knowledge });
     const report = await repo.createReport({ project_id: project.id, period_label: project.period_label, content });
     return c.json({ report }, 201);
   });

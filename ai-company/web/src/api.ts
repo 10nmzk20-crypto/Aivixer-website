@@ -28,11 +28,29 @@ export const api = {
 
 // ---------- 型（API の返り値） ----------
 export interface Employee { id: string; name: string; department: "analysis" | "command" | "execution" | "verification"; role_summary: string; watches: string[]; sort_order: number; current?: string | null }
+export interface Leverage {
+  type: "A" | "B" | "C" | null;
+  type_note?: string | null;
+  initial_hours?: number | null;
+  ongoing_hours?: number | null;
+  automation?: number | null;
+  asset?: number | null;
+  self_service?: number | null;
+  staff_dependency?: number | null;
+  owner_dependency?: number | null;
+  human_work_change?: "decrease" | "same" | "increase" | null;
+  human_work_note?: string | null;
+  manual_reason?: string | null;
+  score: number | null;
+  formula?: string | null;
+  warning?: string | null;
+}
 export interface Task {
   id: string; project_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
   executor_employee_id: string; executor_name: string; assignment_reason: string; restricted_actions: string[]; status: string; due_date: string | null;
   what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
   plan_version: number; plan_change_note: string | null; production_error: string | null; adopted_at: string | null;
+  leverage: Leverage;
   created_at: string; updated_at: string;
 }
 export interface Output { id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string }
