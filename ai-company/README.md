@@ -105,7 +105,9 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
 
 ## Cloudflare に公開する
 
-前提: Cloudflare アカウント（HP と同じでよい）、Node.js 20 以上、Anthropic の API キー。
+前提: Cloudflare アカウント（HP と同じでよい）と Node.js 20 以上。**API キーは要りません**（いまの運用では外部 AI を呼ばないため）。
+
+公開は代表の Cloudflare アカウントでの操作になります。上から順にそのまま貼れば終わります。
 
 1. **ログイン**
    ```bash
@@ -121,20 +123,26 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
    ```bash
    npm run db:migrate
    ```
-4. **API キーを金庫に入れる**（画面や Git には絶対に書かない）
-   ```bash
-   npx wrangler secret put ANTHROPIC_API_KEY
-   ```
+4. **入口の鍵をかける（必須・公開前）** — 下の 2 つのうち簡単な方は B です。
+   - **B. 共有パスワード（すぐ終わる）**
+     ```bash
+     npx wrangler secret put APP_PASSWORD        # 代表が決めたパスワードを入力
+     npx wrangler secret put APP_SESSION_SECRET  # 長いランダム文字列（下のコマンドで作れます）
+     ```
+     ランダム文字列の作り方: `node -e "console.log(crypto.randomUUID()+crypto.randomUUID())"`
+   - **A. Cloudflare Access（より安全。手順 6 参照）**
+
+   どちらも設定しないまま公開した場合、API は「認証が設定されていません」と出てすべて拒否されます。
+   データが漏れることはありませんが、自分でも使えないので必ずどちらかを設定してください。
 5. **公開**
    ```bash
    npm run deploy
    ```
    `https://vixer-ai-company.<アカウント名>.workers.dev` が発行されます。
-6. **入口を閉じる（必須）** — どちらか一方を設定します。設定するまで API は「認証未設定」で拒否されます。
-   - **A. Cloudflare Access（推奨）**: Cloudflare ダッシュボード → Zero Trust → Access → Applications → 「Add an application」→ Self-hosted。
-     Application domain に上の URL、Policy に許可するメールアドレスを登録。作成後に表示される **Application Audience (AUD) Tag** をコピーし、
-     `wrangler.jsonc` の `CF_ACCESS_TEAM_DOMAIN`（Zero Trust のチーム名。`https://<チーム名>.cloudflareaccess.com` の部分）と `CF_ACCESS_AUD` に入れて `npm run deploy` し直します。
-   - **B. 共有パスワード**: `npx wrangler secret put APP_PASSWORD` でパスワードを登録（`APP_SESSION_SECRET` も長いランダム文字列で登録すると安全）。画面にログイン欄が出ます。
+6. **Cloudflare Access を使う場合**（手順 4 で B を選んだならここは飛ばしてよい）
+   Cloudflare ダッシュボード → Zero Trust → Access → Applications → 「Add an application」→ Self-hosted。
+   Application domain に上の URL、Policy に許可するメールアドレスを登録。作成後に表示される **Application Audience (AUD) Tag** をコピーし、
+   `wrangler.jsonc` の `CF_ACCESS_TEAM_DOMAIN`（Zero Trust のチーム名。`https://<チーム名>.cloudflareaccess.com` の部分）と `CF_ACCESS_AUD` に入れて `npm run deploy` し直します。
 7. **iPad で開く** — Safari で URL を開き、共有メニューの「ホーム画面に追加」を押すとアプリのように使えます。
 8. （任意）独自ドメイン `ai.<既存ドメイン>` を Worker の Custom Domain として追加できます。HP のドメイン設定は変更しません。
 
@@ -148,7 +156,9 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
 | `AI_EFFORT` | 考える深さ（`low` / `medium` / `high`） | `medium` |
 | `CF_ACCESS_TEAM_DOMAIN` / `CF_ACCESS_AUD` | Cloudflare Access の設定 | 空 |
 
-秘密情報（`wrangler secret put` で登録）: `ANTHROPIC_API_KEY`、`APP_PASSWORD`、`APP_SESSION_SECRET`。
+秘密情報（`wrangler secret put` で登録）: `APP_PASSWORD`、`APP_SESSION_SECRET`。`ANTHROPIC_API_KEY` は `AI_PROVIDER` を `claude` にするときだけ必要です。
+
+公開前に `npm run preflight` を実行すると、貼り忘れ・設定漏れをまとめて確認できます。
 
 ## フォルダ
 
