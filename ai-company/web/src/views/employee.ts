@@ -2,7 +2,7 @@ import { api } from "../api";
 import { DEPT_JA, esc, fmtDate, statusChip } from "../components";
 
 interface EmployeeDetail {
-  employee: { id: string; name: string; department: string; role_summary: string; watches: string[] };
+  employee: { id: string; name: string; department: string; role_summary: string; role: string; watches: string[]; checkpoints: string[]; needs: string[] };
   current: { tasks: Array<{ id: string; project_id: string; project_title: string; title: string; status: string; updated_at: string }>; analyses: Array<{ project_id: string; project_title: string; created_at: string }> };
   past: {
     outputs: Array<{ id: string; task_id: string; project_id: string; task_title: string; task_status: string; title: string; version: number; created_at: string }>;
@@ -44,8 +44,10 @@ export async function openEmployeeSheet(id: string): Promise<void> {
     ];
     s.innerHTML = `<button type="button" class="close" aria-label="閉じる">×</button>
       <div><div class="eyebrow">${esc(DEPT_JA[e.department] ?? e.department)}</div><h2>${esc(e.name)}</h2></div>
-      <p class="role">${esc(e.role_summary)}</p>
-      <div><div class="eyebrow" style="margin-bottom:8px">見るもの</div><div class="chips">${e.watches.map((w) => `<span>${esc(w)}</span>`).join("")}</div></div>
+      <p class="role">${esc(e.role ?? e.role_summary)}</p>
+      <div><div class="eyebrow" style="margin-bottom:8px">見るべきデータ</div><div class="chips">${e.watches.map((w) => `<span>${esc(w)}</span>`).join("")}</div></div>
+      ${e.checkpoints?.length ? `<div><div class="eyebrow" style="margin-bottom:6px">判断ポイント</div><ul class="guide">${e.checkpoints.map((c) => `<li>${esc(c)}</li>`).join("")}</ul></div>` : ""}
+      ${e.needs?.length ? `<div><div class="eyebrow" style="margin-bottom:8px">必要な入力データ</div><div class="chips">${e.needs.map((n) => `<span>${esc(n)}</span>`).join("")}</div></div>` : ""}
       <div><div class="eyebrow" style="margin-bottom:4px">現在の仕事</div>${current.join("") || '<div class="item"><div class="t faint">現在の仕事はありません</div></div>'}</div>
       <div><div class="eyebrow" style="margin-bottom:4px">過去の成果</div>${past.join("") || '<div class="item"><div class="t faint">まだ成果はありません</div></div>'}</div>`;
     s.querySelector(".close")!.addEventListener("click", closeSheet);

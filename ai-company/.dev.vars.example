@@ -1,7 +1,7 @@
 # ローカル開発用。コピーして .dev.vars にする（.dev.vars は Git に入れない）
 ENVIRONMENT=development
-# AI_PROVIDER を mock にすると API キーなしで動作確認できる（固定のサンプル回答を返す）
-AI_PROVIDER=mock
+# none: 外部 AI を呼ばない（今の運用。ChatGPT 用レポートを作って分析する）
+AI_PROVIDER=none
 # 本物の Claude を使う場合
 # AI_PROVIDER=claude
 # ANTHROPIC_API_KEY=sk-ant-...

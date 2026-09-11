@@ -43,6 +43,9 @@ export class AiProviderError extends Error {
 
 export function getProvider(env: Env): AiProvider {
   const name = providerName(env);
+  if (name === "none") {
+    throw new AiProviderError("このアプリは外部 AI を呼ばない設定です（AI_PROVIDER=none）。分析は ChatGPT 用レポートを作成して行ってください。", false);
+  }
   if (name === "mock") {
     // 固定回答は開発用。本番で誤って使うと、作り話の分析が経営判断に混ざるため拒否する
     if (env.ENVIRONMENT !== "development") {
@@ -66,11 +69,22 @@ export function getProvider(env: Env): AiProvider {
   throw new AiProviderError(`未対応の AI_PROVIDER です: ${name}`, false);
 }
 
-/** 設定名を正規化する。`claude` と `anthropic` は同じ意味 */
-export function providerName(env: Env): "mock" | "claude" | string {
-  const raw = (env.AI_PROVIDER ?? "claude").toLowerCase().trim();
+/**
+ * 設定名を正規化する。
+ * - none  … 外部 AI を呼ばない（既定）。入力保存・KPI 計算・ファネル判定・レポート生成だけを行う
+ * - claude / anthropic … Claude API を呼ぶ
+ * - mock  … 固定回答（開発用。本番では拒否する）
+ */
+export function providerName(env: Env): "none" | "mock" | "claude" | string {
+  const raw = (env.AI_PROVIDER ?? "none").toLowerCase().trim();
   if (raw === "anthropic" || raw === "claude") return "claude";
+  if (raw === "" || raw === "off" || raw === "none") return "none";
   return raw;
+}
+
+/** 外部 AI を呼ばない設定か */
+export function isAiDisabled(env: Env): boolean {
+  return providerName(env) === "none";
 }
 
 export type AnthropicEffort = "low" | "medium" | "high" | "xhigh" | "max";

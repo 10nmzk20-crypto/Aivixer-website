@@ -55,7 +55,7 @@ export function projectRoutes() {
 
     // 前月・過去平均との比較と、ファネル判定はここで計算して保存する（AI には計算させない）
     const history: HistoryEntry[] = periodKey
-      ? (await repo.listProjectsBefore(periodKey, 6)).map((p) => ({ periodKey: p.period_key!, input: normalizeInputData(p.input_data_json ? JSON.parse(p.input_data_json) : null) }))
+      ? (await repo.listProjectsBefore(periodKey, 13)).map((p) => ({ periodKey: p.period_key!, input: normalizeInputData(p.input_data_json ? JSON.parse(p.input_data_json) : null) }))
       : [];
     const comparison = compare(input, periodKey, history);
     const funnel = diagnoseFunnel(input, comparison);
@@ -178,8 +178,11 @@ async function syncWithWorkflow(env: Env, repo: Repo, project: ProjectRow): Prom
       const message = typeof s.error === "string" ? s.error : s.error?.message ?? `Workflow が ${s.status} で終了しました。`;
       await repo.updateProject(project.id, { status: "failed", error: message.slice(0, 1000) });
     } else if (s.status === "complete") {
-      await repo.updateProject(project.id, { status: "awaiting_approval" });
-      await repo.recomputeProjectStatus(project.id);
+      const fresh = await repo.getProject(project.id);
+      if (fresh?.status === "analyzing") {
+        await repo.updateProject(project.id, { status: "awaiting_approval" });
+        await repo.recomputeProjectStatus(project.id);
+      }
     } else if (s.status === "unknown") {
       // ローカル開発でサーバーを再起動した場合など。20 分以上進まなければ失敗扱いにする
       const age = Date.now() - new Date(project.updated_at).getTime();

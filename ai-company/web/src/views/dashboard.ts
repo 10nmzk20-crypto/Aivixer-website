@@ -36,7 +36,7 @@ export async function renderDashboard(main: HTMLElement) {
     <div class="sec first">
       <div class="sec-head"><h2>今日の状況</h2><div class="hint">案件 ${d.totals.projects} 件 · ナレッジ ${d.totals.knowledge} 件</div></div>
       <div class="tiles">
-        ${tile("分析待ち", d.counts.analyzing, d.running_project ? `#/projects/${d.running_project.id}` : "#/history?status=analyzing")}
+        ${tile("集計中", d.counts.analyzing, d.running_project ? `#/projects/${d.running_project.id}` : "#/history?status=analyzing")}
         ${tile("承認待ち", d.counts.awaiting_approval, d.latest_project ? `#/projects/${d.latest_project.id}` : "#/history?status=awaiting_approval", hot)}
         ${tile("実行中", d.counts.in_progress, "#/history?status=in_progress")}
         ${tile("検証待ち", d.counts.awaiting_verification, "#/history?status=awaiting_verification")}
@@ -60,7 +60,7 @@ export async function renderDashboard(main: HTMLElement) {
     </div>
     <div class="sec">
       <div class="sec-head"><h2>AI 社員 <span>${d.employees.length} 名</span></h2><div class="hint">カードをタップすると役割・現在の仕事・過去の成果を表示</div></div>
-      ${dept("analysis", "分析部")}${dept("command", "経営司令塔")}${dept("execution", "実行部")}
+      ${dept("analysis", "分析部")}${dept("command", "司令塔")}${dept("execution", "実行部")}${dept("verification", "検証部")}
     </div>
   </section>`;
 

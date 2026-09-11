@@ -124,5 +124,7 @@ export async function logoutHandler(c: Context<{ Bindings: Env }>) {
 export async function meHandler(c: Context<{ Bindings: Env }>) {
   const mode = authMode(c.env);
   // AI の種類（mock か claude か）だけを返す。API キーなどの秘密情報は一切返さない
-  return c.json({ mode, authenticated: await isAuthenticated(c), ai_provider: providerName(c.env), ai_model: providerName(c.env) === "mock" ? "mock" : c.env.AI_MODEL || "claude-opus-5" });
+  const provider = providerName(c.env);
+  const model = provider === "claude" ? c.env.AI_MODEL || "claude-opus-5" : provider;
+  return c.json({ mode, authenticated: await isAuthenticated(c), ai_provider: provider, ai_model: model });
 }

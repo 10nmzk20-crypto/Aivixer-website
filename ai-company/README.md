@@ -1,7 +1,10 @@
 # ViXer AI Company
 
-Life Design ViXer の社内用 Web アプリ。経営データや相談を入力すると、AI 社員 17 人（分析部 8・経営司令塔 1・実行部 8）が
-**分析 → 問題発見 → 優先順位決定 → 担当 AI 選定 → 実行案作成** までを自動で進め、**代表の承認 → 実施 → KPI 検証 → ナレッジ保存** を画面で管理できます。
+Life Design ViXer の社内用 Web アプリ。経営データを入力すると、**保存 → KPI の自動計算 → 分析材料の整理 → ChatGPT 用レポートの生成**まで行います。
+生成したレポートを ChatGPT に貼り付けて深い分析を行う、という使い方です。
+
+**今の運用では外部 AI（Claude / OpenAI）を呼びません。** 計算と整理はすべてアプリ内で行い、文章による分析は ChatGPT に任せます。
+AI 社員 18 人（分析部 8・司令塔 1・実行部 6・検証部 3）は、数字を読むときの観点として画面で確認できます。
 
 - 公式 HP とは **別の Worker・別の D1・別の URL** で動きます。HP 側には一切触れません。
 - AI は文章・原稿・仕様書を作るだけです。HP 公開・広告出稿・SNS 投稿・LINE 送信・料金変更・会員データ変更は AI からは行えず、代表の承認と人の操作が必要です。
@@ -81,7 +84,7 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
 
 | 名前 | 意味 | 初期値 |
 |---|---|---|
-| `AI_PROVIDER` | `claude`（本番）か `mock`（固定回答・開発用） | `claude` |
+| `AI_PROVIDER` | `none`（外部 AI を呼ばない・今の運用）/ `claude` / `mock`（開発用） | `none` |
 | `AI_MODEL` | 使うモデル | `claude-opus-5` |
 | `AI_MAX_OUTPUT_TOKENS` | 1 回の回答の上限 | `8000` |
 | `AI_EFFORT` | 考える深さ（`low` / `medium` / `high`） | `medium` |
@@ -111,7 +114,9 @@ ai-company/
 | Method | Path | 内容 |
 |---|---|---|
 | GET | `/api/health` | 稼働確認（認証不要） |
-| POST | `/api/tasks/:id/verify-ai` | KPI 実績を保存し、KPI 検証担当 AI に判定を依頼 |
+| POST | `/api/projects/:id/report` | ChatGPT 用レポートを作成して D1 に保存 |
+| GET | `/api/projects/:id/reports` | この案件のレポート履歴 |
+| POST | `/api/tasks/:id/verify-ai` | KPI 実績を保存し、KPI 検証担当 AI に判定を依頼（AI 接続時のみ） |
 | GET/POST | `/api/auth/me`, `/api/auth/login`, `/api/auth/logout` | 認証状態・共有パスワードのログイン |
 | GET | `/api/dashboard` | 今日の状況・最優先・社員の稼働 |
 | GET | `/api/employees`, `/api/employees/:id` | AI 社員一覧・詳細（役割・現在の仕事・過去の成果） |

@@ -6,6 +6,7 @@ import { employeeRoutes } from "./employees";
 import { projectRoutes } from "./projects";
 import { taskRoutes } from "./tasks";
 import { knowledgeRoutes } from "./knowledge";
+import { reportRoutes } from "./reports";
 import { AiProviderError } from "../ai/provider";
 
 export type App = Hono<{ Bindings: Env }>;
@@ -24,6 +25,7 @@ export function createApp(): App {
   app.route("/api", projectRoutes());
   app.route("/api", taskRoutes());
   app.route("/api", knowledgeRoutes());
+  app.route("/api", reportRoutes());
 
   app.notFound((c) => c.json({ error: "not_found", message: "この API はありません。" }, 404));
   app.onError((err, c) => {

@@ -7,7 +7,7 @@ type ProjectListItem = Project & { selected_analysts: string[]; task_count: numb
 export async function renderHistory(main: HTMLElement, params: Record<string, string>) {
   const status = params.status ?? "";
   const { projects } = await api.get<{ projects: ProjectListItem[] }>(`/api/projects?limit=100${status ? `&status=${encodeURIComponent(status)}` : ""}`);
-  const filters = ["", "analyzing", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"];
+  const filters = ["", "ready_for_report", "analyzing", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"];
 
   main.innerHTML = `<section class="view">
     <div class="head"><h1>案件の履歴</h1><div class="date">${projects.length} 件</div></div>

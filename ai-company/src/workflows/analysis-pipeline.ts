@@ -1,6 +1,7 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { AnalysisPipelineParams, Env } from "../env";
-import { finalizeProject, markProjectFailed, runAnalyst, selectAnalysts, synthesize } from "./agents";
+import { finalizeProject, finalizeWithoutAi, markProjectFailed, runAnalyst, selectAnalysts, synthesize } from "./agents";
+import { isAiDisabled } from "../ai/provider";
 
 /** AI 呼び出しを含むステップの再試行設定（合計 3 回まで、10 秒 → 20 秒 → 40 秒） */
 export const AI_STEP = { retries: { limit: 3, delay: "10 seconds", backoff: "exponential" }, timeout: "10 minutes" } as const;
@@ -20,6 +21,11 @@ export class AnalysisPipeline extends WorkflowEntrypoint<Env, AnalysisPipelinePa
   async run(event: WorkflowEvent<AnalysisPipelineParams>, step: WorkflowStep) {
     const { projectId } = event.payload;
     try {
+      // 外部 AI を呼ばない設定のときは、入力・KPI・ファネル判定の保存だけで完了する
+      if (isAiDisabled(this.env)) {
+        return await step.do("finalize-without-ai", DB_STEP, () => finalizeWithoutAi(this.env, projectId));
+      }
+
       const analysts = await step.do("select-analysts", AI_STEP, () => selectAnalysts(this.env, projectId));
 
       const done = await Promise.allSettled(analysts.map((id) => step.do(`analyze-${id}`, AI_STEP, () => runAnalyst(this.env, projectId, id))));

@@ -27,7 +27,7 @@ export const api = {
 };
 
 // ---------- 型（API の返り値） ----------
-export interface Employee { id: string; name: string; department: "analysis" | "command" | "execution"; role_summary: string; watches: string[]; sort_order: number; current?: string | null }
+export interface Employee { id: string; name: string; department: "analysis" | "command" | "execution" | "verification"; role_summary: string; watches: string[]; sort_order: number; current?: string | null }
 export interface Task {
   id: string; project_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
   executor_employee_id: string; executor_name: string; assignment_reason: string; restricted_actions: string[]; status: string; due_date: string | null;
@@ -72,6 +72,7 @@ export interface KnowledgeData {
   kpis?: Array<{ name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null }>;
   achievement?: string | null; result?: string; outcome?: string; lesson?: string | null; next_time?: string | null; other_factors?: string | null; reason?: string | null; date?: string;
 }
+export interface Report { id: string; project_id: string; version: number; period_label: string | null; content: string; char_count: number; created_at: string }
 export interface Knowledge { id: string; kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome: string | null; data: KnowledgeData | null; created_at: string }
 export interface Metric { id: string; label: string; unit: string; source: string; hint?: string }
 export interface MetricGroup { id: string; label: string; description: string; source: string; open: boolean; metrics: Metric[] }

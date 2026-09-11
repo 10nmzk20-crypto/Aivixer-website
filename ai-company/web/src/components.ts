@@ -3,14 +3,14 @@ export const esc = (s: unknown): string =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 export const PROJECT_STATUS_JA: Record<string, string> = {
-  analyzing: "分析中", candidates: "施策候補", awaiting_approval: "代表承認待ち", in_progress: "実行中",
+  analyzing: "集計中", ready_for_report: "レポート作成待ち", candidates: "施策候補", awaiting_approval: "代表承認待ち", in_progress: "実行中",
   awaiting_verification: "検証待ち", completed: "完了", rejected: "却下", failed: "エラー",
 };
 export const TASK_STATUS_JA: Record<string, string> = {
   candidate: "作成中", awaiting_approval: "承認待ち", plan_revising: "施策案を修正中", producing: "成果物を作成中", revising: "成果物を修正中",
   in_progress: "実行中", awaiting_verification: "検証待ち", verifying: "検証中", completed: "完了", rejected: "却下", failed: "エラー",
 };
-export const DEPT_JA: Record<string, string> = { analysis: "分析部", command: "経営司令塔", execution: "実行部" };
+export const DEPT_JA: Record<string, string> = { analysis: "分析部", command: "司令塔", execution: "実行部", verification: "検証部" };
 export const RESTRICTED_JA: Record<string, string> = {
   publish_hp: "HP の本番公開", run_ads: "広告の出稿", post_sns: "SNS 投稿", send_line: "LINE の送信", change_price: "料金の変更", edit_member_data: "会員データの変更",
 };

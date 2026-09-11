@@ -10,7 +10,7 @@ export interface DerivedKpi {
   label: string;
   /** 計算結果。計算できなければ null */
   value: number | null;
-  unit: "%" | "回" | "名";
+  unit: "%" | "回" | "名" | "";
   /** どう計算したか（画面と AI に見せる） */
   formula: string;
   /** 計算できなかった理由 */
@@ -32,6 +32,7 @@ function missingOf(v: Record<string, number>, ids: string[], labels: Record<stri
 }
 
 const L: Record<string, string> = {
+  inquiries: "問い合わせ数",
   gsc_impressions: "検索表示回数",
   gsc_clicks: "検索クリック数",
   gbp_impressions: "プロフィール表示回数",
@@ -95,6 +96,15 @@ export function computeDerived(input: NormalizedInput): DerivedKpi[] {
 
   // ---------- 営業関連 ----------
   kpis.push({
+    id: "inquiry_booking_rate",
+    label: "問い合わせ → 見学率",
+    group: "sales",
+    value: ratio(bookings, v.inquiries),
+    unit: "%",
+    formula: "見学・体験予約数（Web・電話・LINE・その他の合計）÷ 問い合わせ数",
+    missing: ratio(bookings, v.inquiries) === null ? (bookings === undefined ? "見学・体験予約数が未入力" : v.inquiries === undefined ? "問い合わせ数が未入力" : "分母が 0") : undefined,
+  });
+  kpis.push({
     id: "show_rate",
     label: "見学予約 → 実来館率",
     group: "sales",
@@ -118,11 +128,75 @@ export function computeDerived(input: NormalizedInput): DerivedKpi[] {
   });
   add("trial_join_rate", "30日お試し → 本入会率", "sales", ratio(v.trial_joins, v.trials), "30日お試しから 本入会 ÷ 30日お試し 開始人数", ["trial_joins", "trials"]);
 
+  const joins = totalJoins(v);
+  kpis.push({
+    id: "visit_join_rate",
+    label: "見学 → 本入会率（直接 + お試し経由）",
+    group: "sales",
+    value: ratio(joins, v.visits),
+    unit: "%",
+    formula: "（見学から直接 本入会 + 30日お試しから 本入会）÷ 実際の見学・体験人数",
+    missing: ratio(joins, v.visits) === null ? (joins === undefined ? "本入会の人数が未入力" : v.visits === undefined ? "実際の見学・体験人数が未入力" : "分母が 0") : undefined,
+  });
+
   // ---------- 会員関連 ----------
+  const net = v.new_members !== undefined && v.churn !== undefined ? v.new_members - v.churn : null;
+  kpis.push({
+    id: "net_change",
+    label: "会員の純増減",
+    group: "member",
+    value: net,
+    unit: "名",
+    formula: "新規入会者数 − 退会者数",
+    missing: net === null ? missingOf(v, ["new_members", "churn"], L) : undefined,
+  });
   add("join_rate", "新規入会率", "member", ratio(v.new_members, v.members), "新規入会者数 ÷ 月末会員数", ["new_members", "members"]);
   add("churn_rate", "月間退会率", "member", ratio(v.churn, v.members), "退会者数 ÷ 月末会員数", ["churn", "members"]);
 
   return kpis;
+}
+
+/** 認知経路の内訳（見学者に聞いた「何で知りましたか」）を割合にする */
+export interface ChannelShare {
+  label: string;
+  count: number;
+  share: number | null;
+}
+const CHANNEL_LABELS: Record<string, string> = {
+  aw_google_search: "Google 検索",
+  aw_google_maps: "Google マップ",
+  aw_billboard: "大型ビジョン",
+  aw_referral: "紹介",
+  aw_instagram: "Instagram",
+  aw_sns_other: "その他 SNS",
+  aw_passerby: "通りがかり",
+  aw_other: "その他",
+  aw_unknown: "不明",
+};
+export function channelShares(values: Record<string, number>): { rows: ChannelShare[]; total: number } {
+  const rows: ChannelShare[] = [];
+  let total = 0;
+  for (const [id, label] of Object.entries(CHANNEL_LABELS)) {
+    if (values[id] === undefined) continue;
+    total += values[id];
+    rows.push({ label, count: values[id], share: null });
+  }
+  if (total > 0) for (const r of rows) r.share = Math.round((r.count / total) * 1000) / 10;
+  return { rows: rows.sort((a, b) => b.count - a.count), total };
+}
+
+/** 見学・体験予約の経路ごとの割合 */
+export function bookingShares(values: Record<string, number>): { rows: ChannelShare[]; total: number } {
+  const labels: Record<string, string> = { book_web: "Web", book_tel: "電話", book_line: "LINE", book_other: "紹介・その他" };
+  const rows: ChannelShare[] = [];
+  let total = 0;
+  for (const [id, label] of Object.entries(labels)) {
+    if (values[id] === undefined) continue;
+    total += values[id];
+    rows.push({ label, count: values[id], share: null });
+  }
+  if (total > 0) for (const r of rows) r.share = Math.round((r.count / total) * 1000) / 10;
+  return { rows: rows.sort((a, b) => b.count - a.count), total };
 }
 
 /** 検索キーワードごとの CTR を補う（入力が無ければ表示回数とクリック数から計算） */

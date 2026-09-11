@@ -1,4 +1,4 @@
-import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type RosterEntry, type TaskFull, type Verification } from "../api";
+import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type Report, type RosterEntry, type TaskFull, type Verification } from "../api";
 import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
@@ -87,11 +87,22 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       <div style="font-size:12px;color:var(--muted);max-width:280px">${p.selection_reason ? `担当の選定: ${esc(p.selection_reason)}` : ""}</div>
     </div>
     ${funnelSection(p.funnel, p.derived)}
-    <div class="sec"><div class="sec-head"><h2>今回招集された AI 社員 <span>${selected ? `分析 ${b.roster.analysts.length} 名 + 司令塔${b.roster.executors.length ? ` + 実行 ${b.roster.executors.length} 名` : ""}` : "司令塔が招集中"}</span></h2><div class="hint">相談内容に必要な担当だけを招集し、他の社員は動かしません</div></div>
+    <div class="sec" id="reportSec">
+      <div class="sec-head"><h2>ChatGPT 用レポート</h2><div class="hint">このアプリは外部 AI を呼びません。レポートを ChatGPT に貼り付けて分析します</div></div>
+      <div class="card report-card">
+        <div class="report-actions">
+          <button type="button" class="btn primary" id="makeReport">ChatGPT 用レポートを作成</button>
+          <button type="button" class="btn" id="copyReport" hidden>全文コピー</button>
+          <span class="note" id="reportMeta"></span>
+        </div>
+        <div id="reportBody"></div>
+      </div>
+    </div>
+    <div class="sec"${b.roster.analysts.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>今回招集された AI 社員 <span>${selected ? `分析 ${b.roster.analysts.length} 名 + 司令塔${b.roster.executors.length ? ` + 実行 ${b.roster.executors.length} 名` : ""}` : "司令塔が招集中"}</span></h2><div class="hint">相談内容に必要な担当だけを招集し、他の社員は動かしません</div></div>
       <div class="roster">${rosterChips(b.roster.analysts, "分析部", "analysis")}${rosterChips([b.roster.commander], "司令塔", "command")}${rosterChips(b.roster.executors, "実行部", "execution")}</div></div>
-    <div class="sec"><div class="sec-head"><h2>分析部の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
-    <div class="sec"><div class="sec-head"><h2>経営司令塔の判断</h2><div class="hint">判断基準: インパクト ÷ 必要時間</div></div>${commander}</div>
-    <div class="sec"><div class="sec-head"><h2>最優先施策 <span>最大 3 つ · 実行部の成果物</span></h2><div class="hint">採用すると KPI を確定し「実行中」へ</div></div>${tasks}</div>
+    <div class="sec"${b.analyses.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>分析部の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
+    <div class="sec"${b.decision ? "" : ' hidden'}><div class="sec-head"><h2>経営司令塔の判断</h2><div class="hint">判断基準: インパクト ÷ 必要時間</div></div>${commander}</div>
+    <div class="sec"${b.tasks.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>最優先施策 <span>最大 3 つ · 実行部の成果物</span></h2><div class="hint">採用すると KPI を確定し「実行中」へ</div></div>${tasks}</div>
     <div class="foot-note">実行部の成果物は文章・原稿・仕様書のみです。HP 公開、広告出稿、SNS 投稿、LINE 送信、料金変更、会員データ変更は AI からは行えず、代表の承認と操作が必要です。</div>
   </section>`;
 
@@ -153,6 +164,97 @@ function funnelSection(funnel: Funnel | null, derived: { kpis: DerivedKpi[]; com
     ${stages}
     ${kpiTable || missing ? `<div class="kpiwrap"><div class="eyebrow">自動計算した KPI</div>${kpiTable}${missing}</div>` : ""}
   </div>`;
+}
+
+/** ChatGPT 用レポートの作成・表示・コピー・履歴 */
+function setupReport(main: HTMLElement, projectId: string) {
+  const body = main.querySelector<HTMLElement>("#reportBody");
+  const makeBtn = main.querySelector<HTMLButtonElement>("#makeReport");
+  const copyBtn = main.querySelector<HTMLButtonElement>("#copyReport");
+  const meta = main.querySelector<HTMLElement>("#reportMeta");
+  if (!body || !makeBtn || !copyBtn || !meta) return;
+  let current: Report | null = null;
+
+  const show = (report: Report, history: Report[]) => {
+    current = report;
+    copyBtn.hidden = false;
+    meta.textContent = `第 ${report.version} 版 · ${fmtDate(report.created_at, true)} · ${fmtNum(report.char_count)} 字`;
+    body.innerHTML = `<textarea class="report-text" id="reportText" readonly>${esc(report.content)}</textarea>
+      ${history.length > 1 ? `<div class="report-history"><div class="eyebrow">このレポートの履歴</div>${history.map((h) => `<button type="button" class="hrow${h.id === report.id ? " on" : ""}" data-report="${h.id}"><span>第 ${h.version} 版</span><span>${esc(h.period_label ?? "")}</span><span>${esc(fmtDate(h.created_at, true))}</span><span>${fmtNum(h.char_count)} 字</span></button>`).join("")}</div>` : ""}`;
+    main.querySelectorAll<HTMLElement>("[data-report]").forEach((el) =>
+      el.addEventListener("click", () => {
+        const picked = history.find((h) => h.id === el.dataset.report);
+        if (picked) show(picked, history);
+      }),
+    );
+  };
+
+  const load = async (justCreated?: Report) => {
+    const { reports } = await api.get<{ reports: Report[] }>(`/api/projects/${projectId}/reports`);
+    if (reports.length === 0) {
+      body.innerHTML = '<p class="report-empty">まだレポートはありません。上のボタンで作成すると、ChatGPT に貼り付けられる全文がここに出ます。</p>';
+      copyBtn.hidden = true;
+      meta.textContent = "";
+      return;
+    }
+    show(justCreated ?? reports[0], reports);
+  };
+
+  makeBtn.addEventListener("click", async () => {
+    makeBtn.disabled = true;
+    const label = makeBtn.textContent;
+    makeBtn.textContent = "作成しています…";
+    try {
+      const { report } = await api.post<{ report: Report }>(`/api/projects/${projectId}/report`);
+      await load(report);
+      toast("レポートを作成しました。");
+      main.querySelector("#reportSec")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "作成に失敗しました。");
+    } finally {
+      makeBtn.disabled = false;
+      makeBtn.textContent = label;
+    }
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    if (!current) return;
+    const ok = await copyText(current.content, main.querySelector<HTMLTextAreaElement>("#reportText"));
+    toast(ok ? "コピーしました" : "コピーできませんでした。文章を長押しして選択してください。");
+  });
+
+  void load();
+}
+
+/** iPad でも 1 回のタップでコピーできるようにする */
+async function copyText(text: string, area: HTMLTextAreaElement | null): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* 下の方法を試す */
+  }
+  try {
+    // Safari 向け: 表示中のテキスト欄を選択して実行する
+    const el = area ?? document.createElement("textarea");
+    if (!area) {
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+    }
+    el.removeAttribute("readonly");
+    el.focus();
+    el.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    el.setAttribute("readonly", "");
+    if (!area) el.remove();
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function evidenceTable(evidence: Evidence[]): string {
@@ -287,6 +389,7 @@ function bind(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       target_value: num((row.querySelector("[data-kt]") as HTMLInputElement).value),
     })).filter((k) => k.name.trim());
 
+  setupReport(main, b.project.id);
   main.querySelector("[data-retry]")?.addEventListener("click", () => run(() => api.post(`/api/projects/${b.project.id}/retry`), "再実行を開始しました。"));
   main.querySelector("[data-cancel]")?.addEventListener("click", () => { if (confirm("分析を中止しますか？（あとで続きから再実行できます）")) run(() => api.post(`/api/projects/${b.project.id}/cancel`), "分析を中止しました。"); });
   q<HTMLSelectElement>("[data-ver]").forEach((s) => s.addEventListener("change", () => { openVersions[s.dataset.ver!] = Number(s.value); refresh(); }));

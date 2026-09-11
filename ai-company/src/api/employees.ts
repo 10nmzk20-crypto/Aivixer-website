@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../env";
 import { Repo } from "../db/repo";
 import { EMPLOYEE_MAP } from "../employees/roster";
+import { EMPLOYEE_GUIDES } from "../employees/guides";
 
 export function employeeRoutes() {
   const r = new Hono<{ Bindings: Env }>();
@@ -19,6 +20,7 @@ export function employeeRoutes() {
     const row = await repo.getEmployee(id);
     if (!row) return c.json({ error: "not_found" }, 404);
     const def = EMPLOYEE_MAP[id];
+    const guide = EMPLOYEE_GUIDES[id];
 
     const [currentTasks, pastTasks, outputs, analyses] = await Promise.all([
       repo.listTasksByExecutor(id, ["awaiting_approval", "revising", "in_progress", "awaiting_verification"], 10),
@@ -29,7 +31,14 @@ export function employeeRoutes() {
     const runningAnalyses = analyses.filter((a) => a.status === "running");
 
     return c.json({
-      employee: { ...row, watches: JSON.parse(row.watches_json), role_prompt_excerpt: def?.systemPrompt.split("\n").slice(0, 3).join("\n") ?? null },
+      employee: {
+        ...row,
+        watches: guide?.watches ?? JSON.parse(row.watches_json),
+        role: guide?.role ?? row.role_summary,
+        checkpoints: guide?.checkpoints ?? [],
+        needs: guide?.needs ?? [],
+        role_prompt_excerpt: def?.systemPrompt.split("\n").slice(0, 3).join("\n") ?? null,
+      },
       current: {
         tasks: currentTasks.map((t) => ({ id: t.id, project_id: t.project_id, project_title: t.project_title, title: t.title, status: t.status, updated_at: t.updated_at })),
         analyses: runningAnalyses.map((a) => ({ project_id: a.project_id, project_title: a.project_title, created_at: a.created_at })),

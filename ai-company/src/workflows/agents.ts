@@ -1,7 +1,7 @@
 import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../env";
 import { Repo, type ProjectRow, type TaskRow } from "../db/repo";
-import { AiProviderError, getProvider, type AiProvider } from "../ai/provider";
+import { AiProviderError, getProvider, isAiDisabled, type AiProvider } from "../ai/provider";
 import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema } from "../ai/schemas";
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
@@ -495,6 +495,20 @@ export async function verifyTask(env: Env, taskId: string): Promise<string> {
   } catch (err) {
     throw asWorkflowError(err);
   }
+}
+
+/**
+ * 外部 AI を使わない設定のときの仕上げ。
+ * 入力・KPI・ファネル判定はすでに保存済みなので、案件を「レポート作成待ち」にする。
+ */
+export async function finalizeWithoutAi(env: Env, projectId: string): Promise<string> {
+  const repo = new Repo(env.DB);
+  await repo.updateProject(projectId, {
+    status: "ready_for_report",
+    selection_reason: "外部 AI を使わない設定のため、AI 社員は動いていません。ChatGPT 用レポートを作成して分析してください。",
+    error: null,
+  });
+  return "ready_for_report";
 }
 
 export async function finalizeProject(env: Env, projectId: string): Promise<string> {

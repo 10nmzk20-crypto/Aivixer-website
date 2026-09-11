@@ -489,3 +489,16 @@ Step 4  実行部（施策ごとに担当 AI が成果物を作る）
 - `ENVIRONMENT` が `development` 以外で `AI_PROVIDER=mock` なら、分析開始時に再試行なしのエラーにする。
 
 `migrations/0007` は列の追加のみ（tasks に plan_version / plan_change_note / production_error / adopted_at、analyses に unverified_json）。
+
+## 17. 外部 AI を使わない運用と ChatGPT 用レポート
+
+**方針の変更**: 現時点では Claude / OpenAI の API を接続せず、アプリは「入力 → 保存 → KPI 計算 → 分析材料の整理 → ChatGPT 用レポート生成」までを担う。文章による分析は、生成したレポートを ChatGPT に貼り付けて行う。
+
+- `AI_PROVIDER=none` を既定にした。分析開始は入力・KPI・ファネル判定の保存だけで完了し、案件は `ready_for_report` になる。AI 接続用のコード（Claude プロバイダ、各パイプライン）は残してあり、`AI_PROVIDER=claude` に変えれば元の自動分析に戻る。
+- 社員構成を 18 名に。検証部（KPI 検証・改善・ナレッジ）を新設し、改善担当を追加。司令塔を「経営統合・振り分け担当」に改名（`migrations/0008`）。
+- `src/employees/guides.ts` に社員ごとの 役割 / 見るべきデータ / 判断ポイント / 必要な入力データ を定義し、社員シートに表示する。
+- KPI を追加: 問い合わせ → 見学率、見学 → 本入会率（直接 + お試し経由）、会員の純増減、認知経路と予約経路の比率。
+- 前年同月比を追加（`lastYearPeriodKey`）。過去 13 か月分を読み、前月と前年同月の両方と比べる。純増減のように負になりうる値では増減率を出さない。
+- `src/report/build.ts` がレポートを組み立てる。16 章構成で、未入力は「データなし」と明記し、末尾に ChatGPT への依頼文を付ける。
+- `reports` テーブルに版ごとに保存。案件詳細で作成・表示・全文コピー・履歴の切り替えができる。コピーは Clipboard API を使い、失敗する環境では表示中のテキスト欄を選択する方法に切り替える（iPad Safari 対策）。
+- レポート作成時に KPI と比較を計算し直し、案件にも保存する。過去月を後から入力した場合も最新の比較で作られる。

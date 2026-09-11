@@ -18,20 +18,44 @@ export interface ComparisonRow {
   avg3: number | null;
   /** 過去 6 か月平均 */
   avg6: number | null;
+  /** 前年同月の値 */
+  lastYear: number | null;
+  /** 前年同月比の増減 */
+  yoyDelta: number | null;
+  /** 前年同月比の増減率（%） */
+  yoyPct: number | null;
   kind: "input" | "derived";
 }
 
 export interface ComparisonResult {
   /** 比較できた前月の対象月（例: 2026-07）。無ければ null */
   previousPeriod: string | null;
+  /** 比較できた前年同月（例: 2025-08）。無ければ null */
+  lastYearPeriod: string | null;
   rows: ComparisonRow[];
 }
 
 const round = (n: number) => Math.round(n * 10) / 10;
 
+/**
+ * 増減率を出す。前の値が 0 または負のときは出さない。
+ * 純増減のように負になりうる値では、率が意味を持たない（-5 → -12 が「+140%」に見えてしまう）ため。
+ */
+function changePct(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null || previous <= 0) return null;
+  return round(((current - previous) / previous) * 100);
+}
+
 function average(values: number[]): number | null {
   if (values.length === 0) return null;
   return round(values.reduce((a, b) => a + b, 0) / values.length);
+}
+
+/** 対象月（2026-08）の 1 年前（2025-08）を返す */
+export function lastYearPeriodKey(periodKey: string): string | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(periodKey);
+  if (!m) return null;
+  return `${Number(m[1]) - 1}-${m[2]}`;
 }
 
 /** 対象月（2026-08）の 1 か月前を返す */
@@ -58,9 +82,12 @@ export function compare(current: NormalizedInput, currentPeriodKey: string | nul
   const prevKey = currentPeriodKey ? previousPeriodKey(currentPeriodKey) : null;
   // 前月の案件があればそれを使う。無ければ「1 つ前の案件」を前月扱いにしない（月が飛ぶと誤解を生むため）
   const prev = prevKey ? history.find((h) => h.periodKey === prevKey) : undefined;
+  const yoyKey = currentPeriodKey ? lastYearPeriodKey(currentPeriodKey) : null;
+  const yoy = yoyKey ? history.find((h) => h.periodKey === yoyKey) : undefined;
 
   const currentDerived = new Map(computeDerived(current).map((k) => [k.id, k]));
   const prevDerived = prev ? new Map(computeDerived(prev.input).map((k) => [k.id, k])) : new Map<string, DerivedKpi>();
+  const yoyDerived = yoy ? new Map(computeDerived(yoy.input).map((k) => [k.id, k])) : new Map<string, DerivedKpi>();
   const historyDerived = history.map((h) => new Map(computeDerived(h.input).map((k) => [k.id, k])));
 
   const rows: ComparisonRow[] = [];
@@ -70,6 +97,7 @@ export function compare(current: NormalizedInput, currentPeriodKey: string | nul
   for (const id of ids) {
     const cur = current.values[id] ?? null;
     const pre = prev?.input.values[id] ?? null;
+    const ly = yoy?.input.values[id] ?? null;
     rows.push({
       id,
       label: metricLabel(id),
@@ -77,9 +105,12 @@ export function compare(current: NormalizedInput, currentPeriodKey: string | nul
       current: cur,
       previous: pre,
       delta: cur !== null && pre !== null ? round(cur - pre) : null,
-      deltaPct: cur !== null && pre !== null && pre !== 0 ? round(((cur - pre) / pre) * 100) : null,
+      deltaPct: changePct(cur, pre),
       avg3: average(history.slice(0, 3).map((h) => h.input.values[id]).filter((n): n is number => n !== undefined)),
       avg6: average(history.slice(0, 6).map((h) => h.input.values[id]).filter((n): n is number => n !== undefined)),
+      lastYear: ly,
+      yoyDelta: cur !== null && ly !== null ? round(cur - ly) : null,
+      yoyPct: changePct(cur, ly),
       kind: "input",
     });
   }
@@ -87,6 +118,7 @@ export function compare(current: NormalizedInput, currentPeriodKey: string | nul
   // 派生 KPI の比較
   for (const [id, kpi] of currentDerived) {
     const pre = prevDerived.get(id)?.value ?? null;
+    const ly = yoyDerived.get(id)?.value ?? null;
     const cur = kpi.value;
     rows.push({
       id,
@@ -95,14 +127,17 @@ export function compare(current: NormalizedInput, currentPeriodKey: string | nul
       current: cur,
       previous: pre,
       delta: cur !== null && pre !== null ? round(cur - pre) : null,
-      deltaPct: cur !== null && pre !== null && pre !== 0 ? round(((cur - pre) / pre) * 100) : null,
+      deltaPct: changePct(cur, pre),
       avg3: average(historyDerived.slice(0, 3).map((m) => m.get(id)?.value).filter((n): n is number => n !== null && n !== undefined)),
       avg6: average(historyDerived.slice(0, 6).map((m) => m.get(id)?.value).filter((n): n is number => n !== null && n !== undefined)),
+      lastYear: ly,
+      yoyDelta: cur !== null && ly !== null ? round(cur - ly) : null,
+      yoyPct: changePct(cur, ly),
       kind: "derived",
     });
   }
 
-  return { previousPeriod: prev ? prev.periodKey : null, rows };
+  return { previousPeriod: prev ? prev.periodKey : null, lastYearPeriod: yoy ? yoy.periodKey : null, rows };
 }
 
 /** 対象期間の文字列（「2026 年 8 月」など）から 2026-08 を作る */

@@ -34,6 +34,7 @@ export interface KpiRow {
   id: string; task_id: string; name: string; unit: string | null; baseline_value: number | null; target_value: number | null; actual_value: number | null;
   measure_by: string | null; confirmed: number; verdict: string | null; verdict_note: string | null; verified_at: string | null; created_at: string; updated_at: string;
 }
+export interface ReportRow { id: string; project_id: string; version: number; period_label: string | null; content: string; char_count: number; created_at: string }
 export interface KnowledgeRow { id: string; kind: string; title: string; body_md: string; tags_json: string; source_type: string | null; source_id: string | null; outcome: string | null; data_json: string | null; created_at: string }
 export interface VerificationRow {
   id: string; task_id: string; version: number; achievement: string; achievement_reason: string; effect_likelihood: string; other_factors: string;
@@ -41,7 +42,7 @@ export interface VerificationRow {
   model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 
-export const PROJECT_STATUSES = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
+export const PROJECT_STATUSES = ["analyzing", "ready_for_report", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
 export const TASK_STATUSES = [
   "candidate", // 司令塔が作った施策案（承認待ちの手前）
   "awaiting_approval", // 代表の承認待ち（施策案の段階。成果物はまだ無い）
@@ -284,6 +285,29 @@ export class Repo {
     return (await this.db.prepare("SELECT * FROM verifications WHERE task_id = ? ORDER BY version DESC LIMIT 1").bind(taskId).first<VerificationRow>()) ?? null;
   }
 
+  // ---------- ChatGPT 用レポート ----------
+  async createReport(d: { project_id: string; period_label: string | null; content: string }): Promise<ReportRow> {
+    const prev = await this.db.prepare("SELECT MAX(version) AS v FROM reports WHERE project_id = ?").bind(d.project_id).first<{ v: number | null }>();
+    const id = newId();
+    await this.db
+      .prepare("INSERT INTO reports (id, project_id, version, period_label, content, char_count, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, d.project_id, (prev?.v ?? 0) + 1, d.period_label, d.content, d.content.length, now())
+      .run();
+    return (await this.db.prepare("SELECT * FROM reports WHERE id = ?").bind(id).first<ReportRow>())!;
+  }
+  async listReports(projectId: string): Promise<ReportRow[]> {
+    return (await this.db.prepare("SELECT * FROM reports WHERE project_id = ? ORDER BY version DESC").bind(projectId).all<ReportRow>()).results;
+  }
+
+  /** レポートに載せる「過去に実施した施策」（今の案件を除く、新しい順） */
+  async listPastTasksForReport(excludeProjectId: string, limit = 12): Promise<Array<TaskRow & { project_title: string }>> {
+    const r = await this.db
+      .prepare("SELECT t.*, p.title AS project_title FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.project_id != ? AND t.status IN ('completed','in_progress','awaiting_verification','producing','rejected') ORDER BY t.updated_at DESC LIMIT ?")
+      .bind(excludeProjectId, limit)
+      .all<TaskRow & { project_title: string }>();
+    return r.results;
+  }
+
   // ---------- ナレッジ ----------
   async createKnowledge(d: { kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome?: string | null; data?: unknown }): Promise<KnowledgeRow> {
     const id = newId();
@@ -308,7 +332,7 @@ export class Repo {
   async recomputeProjectStatus(projectId: string): Promise<string> {
     const project = await this.getProject(projectId);
     if (!project) return "unknown";
-    if (project.status === "analyzing" || project.status === "failed") return project.status;
+    if (project.status === "analyzing" || project.status === "failed" || project.status === "ready_for_report") return project.status;
     const s = (await this.listTasks(projectId)).map((t) => t.status);
     let status: string;
     if (s.length === 0) status = "completed";

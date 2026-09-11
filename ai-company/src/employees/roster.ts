@@ -2,7 +2,7 @@ import { ANALYSIS_PROMPTS } from "./prompts-analysis";
 import { COMMANDER_PROMPTS } from "./prompts-command";
 import { EXECUTION_PROMPTS } from "./prompts-execution";
 
-export type Department = "analysis" | "command" | "execution";
+export type Department = "analysis" | "command" | "execution" | "verification";
 
 export interface EmployeeDef {
   id: string;
@@ -46,20 +46,26 @@ const EXECUTORS: Array<[string, string, string]> = [
   ["growth", "集客実行担当", "growth_plan"],
   ["line", "LINE・営業担当", "line_script"],
   ["retention", "会員継続担当", "retention_plan"],
+];
+
+/** 検証部。施策の結果を確かめ、直し、残す */
+const VERIFIERS: Array<[string, string, string]> = [
   ["kpi", "KPI 検証担当", "kpi_review"],
+  ["improve", "改善担当", "improve_plan"],
   ["knowledge", "ナレッジ担当", "knowledge_note"],
 ];
 
 export const EMPLOYEES: EmployeeDef[] = [
   ...ANALYSTS.map(([id, name]) => ({ id, name, department: "analysis" as const, systemPrompt: ANALYSIS_PROMPTS[id] })),
-  { id: "commander", name: "経営司令塔", department: "command", systemPrompt: COMMANDER_PROMPTS.synthesize },
+  { id: "commander", name: "経営統合・振り分け担当", department: "command", systemPrompt: COMMANDER_PROMPTS.synthesize },
   ...EXECUTORS.map(([id, name, outputKind]) => ({ id, name, department: "execution" as const, systemPrompt: EXECUTION_PROMPTS[id], outputKind })),
+  ...VERIFIERS.map(([id, name, outputKind]) => ({ id, name, department: "verification" as const, systemPrompt: EXECUTION_PROMPTS[id], outputKind })),
 ];
 
 export const EMPLOYEE_MAP: Record<string, EmployeeDef> = Object.fromEntries(EMPLOYEES.map((e) => [e.id, e]));
 export const ANALYST_IDS = ANALYSTS.map(([id]) => id);
-/** 司令塔が施策の担当として選べる実行 AI（KPI 検証・ナレッジは施策の担当にはならない） */
-export const EXECUTOR_IDS = EXECUTORS.map(([id]) => id).filter((id) => id !== "kpi" && id !== "knowledge");
+/** 司令塔が施策の担当として選べる実行 AI（検証部は施策の担当にはならない） */
+export const EXECUTOR_IDS = EXECUTORS.map(([id]) => id);
 
 export function employeeName(id: string): string {
   return EMPLOYEE_MAP[id]?.name ?? id;
