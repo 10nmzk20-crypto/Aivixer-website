@@ -140,6 +140,9 @@ export function projectRoutes() {
           formula: t.leverage_formula,
           warning: t.leverage_warning,
         },
+        frames: t.frames_json
+          ? { ...(JSON.parse(t.frames_json) as object), sunzi_note: t.sunzi_note, confucius_note: t.confucius_note, warning: t.frame_warning }
+          : null,
         verification: t.verification ? { ...t.verification, kpis_snapshot: JSON.parse(t.verification.kpis_snapshot_json) } : null,
       })),
     });

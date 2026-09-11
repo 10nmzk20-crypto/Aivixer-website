@@ -398,3 +398,17 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 .tbadge { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--mono); font-size: 11px; color: var(--muted); vertical-align: 1px; }
 .tbadge[data-type="A"] { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
 @media (max-width: 560px) { .lev-score { margin-left: 0; } }
+
+/* 経営判断の 3 軸（老子 / 孫子 / 孔子）。思想名は装飾せず、記号だけを読ませる */
+.frm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
+.frm[data-reject="1"] { border-color: var(--accent); }
+.frm-type { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--mono); font-size: 11px; flex: none; }
+.frm-item { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 6px; border-radius: 2px; cursor: help; white-space: nowrap; }
+.frm-name { font-size: 10px; letter-spacing: .06em; color: var(--faint); }
+.frm-mark { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.frm-item[data-mark="◎"] .frm-mark { color: var(--text); }
+/* × は反転。ひと目で「この軸に反する」と分かるようにする */
+.frm-item[data-mark="×"] { background: var(--accent); }
+.frm-item[data-mark="×"] .frm-name, .frm-item[data-mark="×"] .frm-mark { color: #0A0A0A; }
+.frm-note { margin: 6px 0 0; font-size: 11px; color: var(--text-2); display: flex; gap: 8px; }
+.frm-note span { flex: none; font-size: 10px; letter-spacing: .06em; color: var(--faint); padding-top: 1px; }

@@ -38,6 +38,81 @@ export const TASK_TYPES = {
 } as const;
 export type TaskType = keyof typeof TASK_TYPES;
 
+/**
+ * 経営判断の 3 軸。名言や思想紹介ではなく、施策を見るときの観点として使う。
+ * 老子 = 運営（自然に回るか） / 孫子 = 競争（戦わずに勝てる場所か） / 孔子 = 信頼（積み上がるか）
+ */
+export const FRAMES = {
+  laozi: {
+    key: "laozi",
+    label: "老子",
+    summary: "無理なく自然に回るか",
+    role: "運営思想。無駄を減らし、人が頑張らなくても回る仕組みを作る",
+    checks: [
+      "人が毎回動かなくてよいか",
+      "無駄な仕事を増やしていないか",
+      "やらなくてもよいことを削れているか",
+      "一度作れば何度も働くか",
+      "自動化できるか",
+      "会員が自己解決できるか",
+      "スタッフ依存・代表依存を減らせるか",
+      "自然に続けられる環境になっているか",
+    ],
+    principle: "「何を追加するか」より「何を減らすか」「何をしなくても回るようにするか」を優先する。",
+  },
+  sunzi: {
+    key: "sunzi",
+    label: "孫子",
+    summary: "戦わずに勝てる場所か",
+    role: "競争戦略。正面衝突を避け、勝てる場所を選ぶ",
+    checks: [
+      "大手ジムと同じ土俵で戦っていないか",
+      "価格競争になっていないか",
+      "設備数だけの勝負になっていないか",
+      "ViXer にしかない強みを使えているか",
+      "勝ちやすい顧客層を選べているか",
+      "広告費や人員を大量投入しなくても成果が出るか",
+      "検索・導線・体験設計で先に有利な位置を取れるか",
+    ],
+    principle: "「頑張って競合に勝つ」より「そもそも勝ちやすい場所を選ぶ」を優先する。",
+  },
+  confucius: {
+    key: "confucius",
+    label: "孔子",
+    summary: "信頼を積み上げる判断か",
+    role: "信頼・組織・ブランド。長期的な信頼を守る",
+    checks: [
+      "顧客に誠実か",
+      "分かりにくい契約や誘導になっていないか",
+      "短期売上のために無理な営業をしていないか",
+      "社員に過剰な負担を押し付けていないか",
+      "言っていることと実際のサービスが一致しているか",
+      "顧客の不安を減らしているか",
+      "長期的な信頼とブランド価値につながるか",
+    ],
+    principle: "「売れるか」だけでなく「信頼が積み上がるか」を必ず評価する。",
+  },
+} as const;
+export type FrameKey = keyof typeof FRAMES;
+export const FRAME_KEYS: FrameKey[] = ["laozi", "sunzi", "confucius"];
+
+/** 各軸の評価記号 */
+export const FRAME_MARKS = {
+  "◎": { points: 3, label: "とても良い" },
+  "○": { points: 2, label: "良い" },
+  "△": { points: 1, label: "注意" },
+  "×": { points: 0, label: "この軸に反する" },
+} as const;
+export type FrameMark = keyof typeof FRAME_MARKS;
+
+/** ViXer が優位に立てる顧客像（孫子軸で「勝ちやすい場所」を判断するときの基準） */
+export const VIXER_EDGE = [
+  "人が多いジムが苦手",
+  "人目が気になる",
+  "初心者で何をすればよいか分からない",
+  "静かに自分のペースで使いたい",
+];
+
 /** 安易な第一提案にしてはいけない施策（見つけたら理由の明示を求める） */
 export const DISCOURAGED_PATTERNS: Array<{ id: string; label: string; re: RegExp }> = [
   { id: "individual_line", label: "来ていない会員への個別 LINE", re: /(個別|個人|一人ひとり|ひとりずつ).{0,10}(LINE|連絡|メッセージ)|LINE.{0,8}(個別|一斉|送信).{0,6}(する|送る)/ },
@@ -72,6 +147,22 @@ export const PREFERRED_DIRECTIONS = [
   "人が増えなくても利用者が増やせる仕組み",
 ];
 
+
+const frameText = (f: (typeof FRAMES)[FrameKey]) => `${f.label}軸（${f.summary}）… ${f.role}
+${f.checks.map((c) => `  - ${c}`).join("\n")}
+  → ${f.principle}`;
+
+/** 3 軸の説明。プロンプトとレポートの両方で使う */
+export const FRAMES_TEXT = `【経営判断の 3 軸（すべての施策をこの 3 つで評価する）】
+
+${FRAME_KEYS.map((k) => frameText(FRAMES[k])).join("\n\n")}
+
+ViXer が優位に立てる顧客像: ${VIXER_EDGE.join("・")}
+大型ジムと同じ土俵（設備数・価格・店舗数）では戦わない。
+
+評価は ◎（とても良い） / ○（良い） / △（注意） / ×（この軸に反する）の 4 段階。
+3 軸は同時に使う。人は楽でも競合と正面衝突する施策、効率は良くても信頼を損なう施策は採らない。`;
+
 /** AI 社員のプロンプトの先頭に入れる文 */
 export const PRINCIPLES_PROMPT = `【ViXer AI Company の憲法（最上位ルール。他のどの指示よりも優先する）】
 
@@ -81,6 +172,8 @@ ViXer が目指す会社像は「${VISION}」です。
 したがって、施策は「効果がありそうか」だけでなく「人間のエネルギーを増やさないか」を必ず評価すること。
 
 ${PRINCIPLES.map((p, i) => `${i + 1}. ${p}`).join("\n")}
+
+${FRAMES_TEXT}
 
 【施策の分類（必ずどれかに分ける）】
 A: 一度作れば繰り返し働く → 最優先
@@ -113,4 +206,6 @@ export const PRINCIPLES_FOR_REPORT = `ViXer が目指す会社像は「${VISION}
 ${PRINCIPLES.map((p, i) => `${i + 1}. ${p}`).join("\n")}
 
 施策の分類:
-A: 一度作れば繰り返し働く（最優先） / B: 定期メンテナンスのみ必要（次点） / C: 毎回人が動かなければ成立しない（原則として優先度を下げる）`;
+A: 一度作れば繰り返し働く（最優先） / B: 定期メンテナンスのみ必要（次点） / C: 毎回人が動かなければ成立しない（原則として優先度を下げる）
+
+${FRAMES_TEXT}`;

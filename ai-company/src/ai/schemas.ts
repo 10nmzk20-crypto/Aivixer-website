@@ -66,6 +66,20 @@ export const TaskProposalSchema = z.object({
   human_work_note: z.string().describe("人間の仕事がどう変わるかの説明（誰の何の作業が減る・増えるか）"),
   manual_reason: z.string().nullable().describe("C に分類した場合、なぜ人手が必要で、なぜ仕組み化できないかの説明。A・B なら null"),
 
+  // ---- 孫子軸（競合と正面衝突せず、勝ちやすい場所か）。記号はアプリが決めるので、材料だけ答える ----
+  head_on_competition: z.number().int().describe("大手ジムと同じ土俵（設備数・価格・店舗数）で戦っている度合い 1〜5。低いほど良い"),
+  uses_strength: z.number().int().describe("ViXer の強み（静か・人目が気にならない・初心者が安心・自分のペース）を使えている度合い 1〜5"),
+  winnable_segment: z.number().int().describe("勝ちやすい顧客層を選べている度合い 1〜5"),
+  price_competition: z.boolean().describe("値下げ・割引など価格競争になっているか"),
+  sunzi_note: z.string().describe("競合との位置関係の説明（なぜ正面衝突しないか、どの強みを使うか）1〜2 文"),
+
+  // ---- 孔子軸（短期の売上より、信頼が積み上がるか）----
+  customer_trust: z.number().int().describe("顧客に誠実で、不安を減らす度合い 1〜5"),
+  staff_burden: z.number().int().describe("社員にかかる負担 1〜5。低いほど良い"),
+  brand_long_term: z.number().int().describe("長期的にブランド価値が上がる度合い 1〜5"),
+  short_term_bias: z.boolean().describe("短期の売上のために、無理な営業や分かりにくい誘導になっているか"),
+  confucius_note: z.string().describe("信頼への影響の説明（顧客・社員から見てどうか）1〜2 文"),
+
   difficulty: z.number().int().describe("実行難易度 1（簡単）〜5（難しい）"),
   cost_estimate: z.string().describe("必要コスト（例: 0 円 / 約 5,000 円 / 不明）"),
   priority_reason: z.string().describe("なぜこの優先順位か。効果だけでなく、人の仕事を増やさないか・将来も働き続けるかを含めて書く"),

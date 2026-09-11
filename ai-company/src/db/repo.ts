@@ -28,6 +28,9 @@ export interface TaskRow {
   staff_dependency: number | null; owner_dependency: number | null;
   human_work_change: string | null; human_work_note: string | null; manual_reason: string | null;
   leverage_score: number | null; leverage_formula: string | null; leverage_warning: string | null;
+  head_on_competition: number | null; uses_strength: number | null; winnable_segment: number | null; price_competition: number | null; sunzi_note: string | null;
+  customer_trust: number | null; staff_burden: number | null; brand_long_term: number | null; short_term_bias: number | null; confucius_note: string | null;
+  laozi: string | null; sunzi: string | null; confucius: string | null; frame_total: number | null; frames_json: string | null; frame_warning: string | null;
   created_at: string; updated_at: string;
 }
 export interface OutputRow {
@@ -64,6 +67,23 @@ export interface LeverageFields {
   leverage_score: number;
   leverage_formula: string;
   leverage_warning: string | null;
+  // ---- 経営判断の 3 軸。AI が答えた材料と、アプリが計算した評価 ----
+  head_on_competition: number;
+  uses_strength: number;
+  winnable_segment: number;
+  price_competition: number;
+  sunzi_note: string;
+  customer_trust: number;
+  staff_burden: number;
+  brand_long_term: number;
+  short_term_bias: number;
+  confucius_note: string;
+  laozi: string;
+  sunzi: string;
+  confucius: string;
+  frame_total: number;
+  frames_json: string;
+  frame_warning: string | null;
 }
 
 export const PROJECT_STATUSES = ["analyzing", "ready_for_report", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
@@ -202,7 +222,7 @@ export class Repo {
     const g = d.leverage;
     await this.db
       .prepare(
-        "INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, what_to_do, human_owner, duration_days, difficulty, cost_estimate, task_type, type_note, initial_hours, ongoing_hours, automation_score, asset_score, self_service, staff_dependency, owner_dependency, human_work_change, human_work_note, manual_reason, leverage_score, leverage_formula, leverage_warning, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO tasks (id, project_id, decision_id, rank, title, objective, reasoning, impact_score, effort_hours, executor_employee_id, assignment_reason, restricted_actions_json, status, due_date, what_to_do, human_owner, duration_days, difficulty, cost_estimate, task_type, type_note, initial_hours, ongoing_hours, automation_score, asset_score, self_service, staff_dependency, owner_dependency, human_work_change, human_work_note, manual_reason, leverage_score, leverage_formula, leverage_warning, head_on_competition, uses_strength, winnable_segment, price_competition, sunzi_note, customer_trust, staff_burden, brand_long_term, short_term_bias, confucius_note, laozi, sunzi, confucius, frame_total, frames_json, frame_warning, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
       .bind(
         id, d.project_id, d.decision_id, d.rank, d.title, d.objective, d.reasoning, d.impact_score, d.effort_hours,
@@ -211,6 +231,9 @@ export class Repo {
         g.task_type, g.type_note, g.initial_hours, g.ongoing_hours, g.automation_score, g.asset_score, g.self_service,
         g.staff_dependency, g.owner_dependency, g.human_work_change, g.human_work_note, g.manual_reason,
         g.leverage_score, g.leverage_formula, g.leverage_warning,
+        g.head_on_competition, g.uses_strength, g.winnable_segment, g.price_competition, g.sunzi_note,
+        g.customer_trust, g.staff_burden, g.brand_long_term, g.short_term_bias, g.confucius_note,
+        g.laozi, g.sunzi, g.confucius, g.frame_total, g.frames_json, g.frame_warning,
         t, t,
       )
       .run();

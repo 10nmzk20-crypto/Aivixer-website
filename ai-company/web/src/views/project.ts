@@ -1,4 +1,4 @@
-import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type Report, type RosterEntry, type TaskFull, type Verification } from "../api";
+import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, type Frame, type Funnel, type Kpi, type MetricGroup, type ProjectBundle, type Report, type RosterEntry, type TaskFull, type Verification } from "../api";
 import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, HUMAN_WORK_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, TASK_TYPE_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
@@ -346,7 +346,7 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
 
   return `<div class="task" data-task-card="${t.id}"><div class="tp"><div class="top"><span class="rk">${t.rank}</span>${chip}</div><h3>${esc(t.title)}</h3><p class="ob">目的: ${esc(t.objective)}</p>
     ${t.what_to_do ? `<p class="todo">${esc(t.what_to_do)}</p>` : ""}
-    ${leverageBlock(t)}
+    ${leverageBlock(t)}${framesRow(t)}
     <dl class="kv">
       <dt>担当 AI</dt><dd><b><button type="button" data-employee="${esc(t.executor_employee_id)}">${esc(t.executor_name)}</button></b> — ${esc(t.assignment_reason)}</dd>
       <dt>人間側</dt><dd>${esc(t.human_owner ?? "代表")}</dd>
@@ -387,6 +387,38 @@ function leverageBlock(t: TaskFull): string {
     ${g.type_note ? `<p class="lev-warn">${esc(g.type_note)}</p>` : ""}
     ${g.warning ? `<p class="lev-warn">${esc(g.warning)}</p>` : ""}
   </div>`;
+}
+
+/**
+ * 経営判断の 3 軸を 1 行で出す。
+ *   A  老子 ◎  孫子 ◎  孔子 ○  人的負担 ↓  資産性 高
+ * 記号に触れると、なぜその評価になったかが出る。思想名は装飾しない。
+ */
+function framesRow(t: TaskFull): string {
+  const f = t.frames;
+  if (!f) return "";
+  const g = t.leverage;
+  const hw = g.human_work_change ?? "same";
+  const burden = hw === "decrease" ? "↓" : hw === "increase" ? "↑" : "→";
+  const asset = g.asset === null || g.asset === undefined ? "—" : g.asset >= 4 ? "高" : g.asset >= 3 ? "中" : "低";
+  const why = (x: Frame) => {
+    const parts: string[] = [`${x.label}軸: ${x.summary}`];
+    if (x.met.length) parts.push(`満たしている: ${x.met.join(" / ")}`);
+    if (x.missed.length) parts.push(`満たしていない: ${x.missed.join(" / ")}`);
+    if (x.cap) parts.push(x.cap);
+    return parts.join("\n");
+  };
+  const cell = (x: Frame) =>
+    `<span class="frm-item" data-mark="${esc(x.mark)}" title="${esc(why(x))}"><span class="frm-name">${esc(x.label)}</span><span class="frm-mark">${esc(x.mark)}</span></span>`;
+  return `<div class="frm" data-reject="${f.hasReject ? "1" : "0"}">
+    ${g.type ? `<span class="frm-type">${esc(g.type)}</span>` : ""}
+    ${cell(f.laozi)}${cell(f.sunzi)}${cell(f.confucius)}
+    <span class="frm-item" title="この施策で人の仕事が ${esc(HUMAN_WORK_JA[hw] ?? "")}"><span class="frm-name">人的負担</span><span class="frm-mark">${burden}</span></span>
+    <span class="frm-item" title="作ったものが残り、後から何度も働くか（資産性 ${g.asset ?? "—"}/5）"><span class="frm-name">資産性</span><span class="frm-mark">${asset}</span></span>
+  </div>
+  ${f.sunzi_note ? `<p class="frm-note"><span>孫子</span>${esc(f.sunzi_note)}</p>` : ""}
+  ${f.confucius_note ? `<p class="frm-note"><span>孔子</span>${esc(f.confucius_note)}</p>` : ""}
+  ${f.warning ? `<p class="lev-warn">${esc(f.warning)}</p>` : ""}`;
 }
 
 /** KPI 検証担当の判定結果 */

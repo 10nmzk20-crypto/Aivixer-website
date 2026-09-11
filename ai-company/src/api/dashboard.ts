@@ -50,6 +50,7 @@ export function dashboardRoutes() {
         executor_name: names[t.executor_employee_id] ?? t.executor_employee_id,
         restricted_actions: JSON.parse(t.restricted_actions_json),
         leverage: { type: t.task_type ?? null, score: t.leverage_score, human_work_change: t.human_work_change },
+        frames: t.frames_json ? (JSON.parse(t.frames_json) as object) : null,
       })),
       active_tasks: activeTasks
         .filter((t) => t.status === "in_progress" || t.status === "awaiting_verification" || t.status === "verifying")

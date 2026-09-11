@@ -8,6 +8,7 @@ import { COMMANDER_PROMPTS } from "../employees/prompts-command";
 import { detectRestrictedActions } from "../policy/restricted-actions";
 import { PRINCIPLES_PROMPT } from "../principles";
 import { checkType, computeLeverage, leverageWarning } from "../analysis/leverage";
+import { compareForRanking, evaluateFrames, frameWarning, type FramesResult } from "../analysis/frames";
 import type { LeverageFields } from "../db/repo";
 import { METRIC_GROUPS, SOURCE_LABEL, metricLabel, normalizeInputData, type NormalizedInput } from "../metrics";
 import { computeDerived, totalBookings, type DerivedKpi } from "../analysis/derived";
@@ -313,10 +314,12 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
     output_tokens: usage.outputTokens,
   });
   const ids: string[] = [];
-  // 仕組みスコア（人の仕事を増やさず将来も働き続けるか）の高い順に並べ替える
+  // 3 軸（老子・孫子・孔子）と仕組みスコアで並べ替える。
+  // どれか 1 軸でも × の施策は下に落ちるので、「人は楽だが大手と正面衝突する」
+  // 「効率は良いが信頼を損なう」施策が上位に来ない
   const proposals = [...data.tasks]
-    .map((p) => ({ p, score: leverageOf(p).leverage_score }))
-    .sort((a, b) => b.score - a.score)
+    .map((p) => ({ p, key: rankingKeyOf(p) }))
+    .sort((a, b) => compareForRanking(a.key, b.key))
     .slice(0, 3)
     .map((x) => x.p);
   for (const [i, p] of proposals.entries()) {
@@ -555,6 +558,25 @@ function leverageOf(p: TaskProposal): LeverageFields {
   const { type, note } = checkType(p.task_type, input);
   const result = computeLeverage(input);
   const text = `${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`;
+  // 老子 / 孫子 / 孔子 の 3 軸。記号を決めるのはコードで、AI には材料だけ答えさせている
+  const frames = evaluateFrames({
+    taskType: type,
+    ongoingHoursPerMonth: input.ongoingHoursPerMonth,
+    asset: input.asset,
+    automation: input.automation,
+    selfService: clamp(Math.round(p.self_service), 1, 5),
+    staffDependency: input.staffDependency,
+    ownerDependency: input.ownerDependency,
+    initialHours: input.initialHours,
+    headOnCompetition: clamp(Math.round(p.head_on_competition), 1, 5),
+    usesStrength: clamp(Math.round(p.uses_strength), 1, 5),
+    winnableSegment: clamp(Math.round(p.winnable_segment), 1, 5),
+    priceCompetition: p.price_competition,
+    customerTrust: clamp(Math.round(p.customer_trust), 1, 5),
+    staffBurden: clamp(Math.round(p.staff_burden), 1, 5),
+    brandLongTerm: clamp(Math.round(p.brand_long_term), 1, 5),
+    shortTermBias: p.short_term_bias,
+  });
   return {
     task_type: type,
     type_note: note,
@@ -571,7 +593,29 @@ function leverageOf(p: TaskProposal): LeverageFields {
     leverage_score: result.score,
     leverage_formula: result.formula,
     leverage_warning: leverageWarning({ type, text, manualReason: p.manual_reason?.trim() || null, ongoingHoursPerMonth: input.ongoingHoursPerMonth }),
+    head_on_competition: clamp(Math.round(p.head_on_competition), 1, 5),
+    uses_strength: clamp(Math.round(p.uses_strength), 1, 5),
+    winnable_segment: clamp(Math.round(p.winnable_segment), 1, 5),
+    price_competition: p.price_competition ? 1 : 0,
+    sunzi_note: p.sunzi_note,
+    customer_trust: clamp(Math.round(p.customer_trust), 1, 5),
+    staff_burden: clamp(Math.round(p.staff_burden), 1, 5),
+    brand_long_term: clamp(Math.round(p.brand_long_term), 1, 5),
+    short_term_bias: p.short_term_bias ? 1 : 0,
+    confucius_note: p.confucius_note,
+    laozi: frames.laozi.mark,
+    sunzi: frames.sunzi.mark,
+    confucius: frames.confucius.mark,
+    frame_total: frames.total,
+    frames_json: JSON.stringify(frames),
+    frame_warning: frameWarning(frames),
   };
+}
+
+/** 並べ替えに使う材料。leverageOf を 2 回呼ばないようまとめて取り出す */
+function rankingKeyOf(p: TaskProposal): { frames: FramesResult; leverageScore: number } {
+  const g = leverageOf(p);
+  return { frames: JSON.parse(g.frames_json) as FramesResult, leverageScore: g.leverage_score };
 }
 const dueDate = (days: number) => {
   const d = new Date();

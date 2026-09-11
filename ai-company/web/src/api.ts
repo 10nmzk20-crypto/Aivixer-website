@@ -45,12 +45,35 @@ export interface Leverage {
   formula?: string | null;
   warning?: string | null;
 }
+
+/** 経営判断の 3 軸。アプリが計算した記号と、その理由 */
+export type FrameMark = "◎" | "○" | "△" | "×";
+export interface Frame {
+  label: string;
+  summary: string;
+  mark: FrameMark;
+  met: string[];
+  missed: string[];
+  cap: string | null;
+}
+export interface Frames {
+  laozi: Frame;
+  sunzi: Frame;
+  confucius: Frame;
+  total: number;
+  hasReject: boolean;
+  /** AI が書いた補足（競合との位置関係・信頼への影響） */
+  sunzi_note?: string | null;
+  confucius_note?: string | null;
+  warning?: string | null;
+}
 export interface Task {
   id: string; project_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
   executor_employee_id: string; executor_name: string; assignment_reason: string; restricted_actions: string[]; status: string; due_date: string | null;
   what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
   plan_version: number; plan_change_note: string | null; production_error: string | null; adopted_at: string | null;
   leverage: Leverage;
+  frames: Frames | null;
   created_at: string; updated_at: string;
 }
 export interface Output { id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string }
