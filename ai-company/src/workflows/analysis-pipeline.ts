@@ -1,6 +1,6 @@
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers";
 import type { AnalysisPipelineParams, Env } from "../env";
-import { finalizeProject, markProjectFailed, produceOutput, runAnalyst, selectAnalysts, synthesize } from "./agents";
+import { finalizeProject, markProjectFailed, runAnalyst, selectAnalysts, synthesize } from "./agents";
 
 /** AI 呼び出しを含むステップの再試行設定（合計 3 回まで、10 秒 → 20 秒 → 40 秒） */
 export const AI_STEP = { retries: { limit: 3, delay: "10 seconds", backoff: "exponential" }, timeout: "10 minutes" } as const;
@@ -8,11 +8,13 @@ const DB_STEP = { retries: { limit: 3, delay: "2 seconds", backoff: "constant" }
 
 /**
  * 分析パイプライン:
- *   1. 司令塔が分析担当を選ぶ
+ *   1. 司令塔が分析担当を選ぶ（相談内容に必要な 2〜4 名だけ）
  *   2. 分析担当がそれぞれ分析する（並行）
  *   3. 司令塔が統合し、最優先施策（最大 3）を決める
- *   4. 実行担当が施策ごとに成果物を作る（並行）
- *   5. 案件を「代表承認待ち」にする
+ *   4. 案件を「代表承認待ち」にする
+ *
+ * 成果物はここでは作らない。代表が「採用」を押したあと、ExecutionPipeline が
+ * 担当の実行 AI に作らせる（承認なしに成果物を量産しないため）。
  */
 export class AnalysisPipeline extends WorkflowEntrypoint<Env, AnalysisPipelineParams> {
   async run(event: WorkflowEvent<AnalysisPipelineParams>, step: WorkflowStep) {
@@ -27,9 +29,7 @@ export class AnalysisPipeline extends WorkflowEntrypoint<Env, AnalysisPipelinePa
         throw new Error(`分析担当の処理がすべて失敗しました: ${first?.reason instanceof Error ? first.reason.message : String(first?.reason)}`);
       }
 
-      const taskIds = await step.do("synthesize", AI_STEP, () => synthesize(this.env, projectId));
-
-      await Promise.allSettled(taskIds.map((taskId, i) => step.do(`produce-${i + 1}`, AI_STEP, () => produceOutput(this.env, taskId, null))));
+      await step.do("synthesize", AI_STEP, () => synthesize(this.env, projectId));
 
       return await step.do("finalize", DB_STEP, () => finalizeProject(this.env, projectId));
     } catch (err) {

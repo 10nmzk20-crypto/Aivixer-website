@@ -43,7 +43,13 @@ export class AiProviderError extends Error {
 
 export function getProvider(env: Env): AiProvider {
   const name = providerName(env);
-  if (name === "mock") return new MockProvider();
+  if (name === "mock") {
+    // 固定回答は開発用。本番で誤って使うと、作り話の分析が経営判断に混ざるため拒否する
+    if (env.ENVIRONMENT !== "development") {
+      throw new AiProviderError("本番環境では固定回答モード（AI_PROVIDER=mock）は使えません。AI_PROVIDER を claude にして ANTHROPIC_API_KEY を登録してください。", false);
+    }
+    return new MockProvider();
+  }
   if (name === "claude") {
     if (!env.ANTHROPIC_API_KEY) {
       throw new AiProviderError("ANTHROPIC_API_KEY が設定されていません。`wrangler secret put ANTHROPIC_API_KEY` で登録してください。", false);

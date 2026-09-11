@@ -11,7 +11,8 @@ export interface ProjectRow {
 }
 export interface AnalysisRow {
   id: string; project_id: string; employee_id: string; status: string; headline: string | null; facts_json: string | null; hypotheses_json: string | null;
-  evidence_json: string | null; needed_data_json: string | null; actions_json: string | null; findings_md: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
+  evidence_json: string | null; needed_data_json: string | null; actions_json: string | null; unverified_json: string | null; findings_md: string | null;
+  model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string;
 }
 export interface DecisionRow {
   id: string; project_id: string; version: number; summary_md: string; top_issue: string | null; reasoning_md: string | null; facts_json: string; hypotheses_json: string; evidence_json: string | null; needed_data_json: string; not_now_json: string;
@@ -20,7 +21,9 @@ export interface DecisionRow {
 export interface TaskRow {
   id: string; project_id: string; decision_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
   executor_employee_id: string; assignment_reason: string; restricted_actions_json: string; status: string; due_date: string | null;
-  what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null; created_at: string; updated_at: string;
+  what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
+  plan_version: number; plan_change_note: string | null; production_error: string | null; adopted_at: string | null;
+  created_at: string; updated_at: string;
 }
 export interface OutputRow {
   id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null;
@@ -39,7 +42,19 @@ export interface VerificationRow {
 }
 
 export const PROJECT_STATUSES = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
-export const TASK_STATUSES = ["candidate", "awaiting_approval", "revising", "in_progress", "awaiting_verification", "verifying", "completed", "rejected", "failed"] as const;
+export const TASK_STATUSES = [
+  "candidate", // 司令塔が作った施策案（承認待ちの手前）
+  "awaiting_approval", // 代表の承認待ち（施策案の段階。成果物はまだ無い）
+  "plan_revising", // 代表の修正指示で、司令塔が施策案を作り直している
+  "producing", // 採用され、実行担当 AI が成果物を作成中
+  "in_progress", // 成果物ができて実行中
+  "revising", // 成果物の修正を実行担当 AI が作成中
+  "awaiting_verification",
+  "verifying",
+  "completed",
+  "rejected",
+  "failed",
+] as const;
 
 export const now = () => new Date().toISOString();
 export const newId = () => crypto.randomUUID();
@@ -110,10 +125,10 @@ export class Repo {
       .bind(newId(), projectId, employeeId, now())
       .run();
   }
-  async completeAnalysis(projectId: string, employeeId: string, d: { conclusion: string; facts: string[]; hypotheses: unknown[]; evidence: unknown[]; missing_data: string[]; actions: string[]; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
+  async completeAnalysis(projectId: string, employeeId: string, d: { conclusion: string; facts: string[]; hypotheses: unknown[]; evidence: unknown[]; missing_data: string[]; actions: string[]; unverified_numbers: string[]; model: string; input_tokens: number; output_tokens: number }): Promise<void> {
     await this.db
-      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, evidence_json = ?, needed_data_json = ?, actions_json = ?, findings_md = NULL, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
-      .bind(d.conclusion, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.missing_data), json(d.actions), d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
+      .prepare("UPDATE analyses SET status = 'done', headline = ?, facts_json = ?, hypotheses_json = ?, evidence_json = ?, needed_data_json = ?, actions_json = ?, unverified_json = ?, findings_md = NULL, model = ?, input_tokens = ?, output_tokens = ?, created_at = ? WHERE project_id = ? AND employee_id = ?")
+      .bind(d.conclusion, json(d.facts), json(d.hypotheses), json(d.evidence), json(d.missing_data), json(d.actions), json(d.unverified_numbers), d.model, d.input_tokens, d.output_tokens, now(), projectId, employeeId)
       .run();
   }
   async failAnalysis(projectId: string, employeeId: string, message: string): Promise<void> {
@@ -298,8 +313,8 @@ export class Repo {
     let status: string;
     if (s.length === 0) status = "completed";
     else if (s.some((x) => x === "candidate" || x === "failed")) status = "candidates";
-    else if (s.some((x) => x === "awaiting_approval" || x === "revising")) status = "awaiting_approval";
-    else if (s.some((x) => x === "in_progress")) status = "in_progress";
+    else if (s.some((x) => x === "awaiting_approval" || x === "plan_revising")) status = "awaiting_approval";
+    else if (s.some((x) => x === "producing" || x === "revising" || x === "in_progress")) status = "in_progress";
     else if (s.some((x) => x === "awaiting_verification" || x === "verifying")) status = "awaiting_verification";
     else if (s.every((x) => x === "rejected")) status = "rejected";
     else status = "completed";

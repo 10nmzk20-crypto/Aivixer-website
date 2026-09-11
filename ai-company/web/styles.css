@@ -356,3 +356,5 @@ details.missing ul { margin: 6px 0 0; padding-left: 18px; color: var(--faint); }
   details.block > summary .count { grid-column: 2; }
 }
 @media (max-width: 560px) { .funnel { grid-template-columns: 1fr; } }
+
+.acc .body .unverified { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 3px; font-size: 12px; color: var(--text); background: var(--surface-2); }

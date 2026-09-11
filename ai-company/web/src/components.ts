@@ -7,8 +7,8 @@ export const PROJECT_STATUS_JA: Record<string, string> = {
   awaiting_verification: "検証待ち", completed: "完了", rejected: "却下", failed: "エラー",
 };
 export const TASK_STATUS_JA: Record<string, string> = {
-  candidate: "作成中", awaiting_approval: "承認待ち", revising: "修正中", in_progress: "実行中",
-  awaiting_verification: "検証待ち", verifying: "検証中", completed: "完了", rejected: "却下", failed: "エラー",
+  candidate: "作成中", awaiting_approval: "承認待ち", plan_revising: "施策案を修正中", producing: "成果物を作成中", revising: "成果物を修正中",
+  in_progress: "実行中", awaiting_verification: "検証待ち", verifying: "検証中", completed: "完了", rejected: "却下", failed: "エラー",
 };
 export const DEPT_JA: Record<string, string> = { analysis: "分析部", command: "経営司令塔", execution: "実行部" };
 export const RESTRICTED_JA: Record<string, string> = {

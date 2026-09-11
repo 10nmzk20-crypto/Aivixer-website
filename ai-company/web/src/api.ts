@@ -31,7 +31,9 @@ export interface Employee { id: string; name: string; department: "analysis" | "
 export interface Task {
   id: string; project_id: string; rank: number; title: string; objective: string; reasoning: string; impact_score: number; effort_hours: number;
   executor_employee_id: string; executor_name: string; assignment_reason: string; restricted_actions: string[]; status: string; due_date: string | null;
-  what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null; created_at: string; updated_at: string;
+  what_to_do: string | null; human_owner: string | null; duration_days: number | null; difficulty: number | null; cost_estimate: string | null;
+  plan_version: number; plan_change_note: string | null; production_error: string | null; adopted_at: string | null;
+  created_at: string; updated_at: string;
 }
 export interface Output { id: string; task_id: string; employee_id: string; version: number; kind: string; title: string; content_md: string; revision_note: string | null; model: string | null; input_tokens: number | null; output_tokens: number | null; created_at: string }
 export interface Approval { id: string; decision: string; note: string | null; decided_by: string; decided_at: string }
@@ -45,7 +47,7 @@ export interface TaskFull extends Task { outputs: Output[]; approvals: Approval[
 export interface ActiveTask { id: string; project_id: string; project_title: string; title: string; status: string; executor_name: string; due_date: string | null; human_owner: string | null }
 export interface Evidence { label: string; value: string; source: string }
 export interface Hypothesis { hypothesis: string; rationale: string }
-export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; conclusion: string | null; facts: string[]; hypotheses: Hypothesis[]; evidence: Evidence[]; missing_data: string[]; actions: string[]; findings_md: string | null; model: string | null }
+export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; conclusion: string | null; facts: string[]; hypotheses: Hypothesis[]; evidence: Evidence[]; missing_data: string[]; actions: string[]; unverified_numbers: string[]; findings_md: string | null; model: string | null }
 export interface Decision { id: string; version: number; top_issue: string; reasoning_md: string; evidence: Evidence[]; needed_data: string[]; not_now: Array<{ item: string; reason: string }>; created_at: string }
 export interface RosterEntry { id: string; name: string }
 export interface Project {

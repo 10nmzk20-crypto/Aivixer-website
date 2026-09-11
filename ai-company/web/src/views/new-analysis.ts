@@ -63,6 +63,8 @@ export async function renderNewAnalysis(main: HTMLElement) {
 
   // 入力済み件数をブロックごとに表示
   const updateCounts = () => {
+    const summaryEl = main.querySelector<HTMLElement>("#summary");
+    if (!summaryEl) return; // 別の画面に移った後は何もしない
     let total = 0;
     for (const g of groups) {
       const inputs = [...main.querySelectorAll<HTMLInputElement>(`[data-group="${g.id}"] [data-metric]`)];
@@ -73,7 +75,7 @@ export async function renderNewAnalysis(main: HTMLElement) {
     }
     const kw = main.querySelectorAll<HTMLInputElement>("[data-kw-keyword]");
     const kwFilled = [...kw].filter((i) => i.value.trim()).length;
-    main.querySelector<HTMLElement>("#summary")!.textContent = `入力: ${total} 項目${kwFilled ? ` · キーワード ${kwFilled} 件` : ""}`;
+    summaryEl.textContent = `入力: ${total} 項目${kwFilled ? ` · キーワード ${kwFilled} 件` : ""}`;
   };
   main.addEventListener("input", updateCounts);
 
@@ -86,6 +88,8 @@ export async function renderNewAnalysis(main: HTMLElement) {
 
   setupKeywords(main, updateCounts);
   updateCounts();
+
+  const cleanup = () => main.removeEventListener("input", updateCounts);
 
   btn.addEventListener("click", async () => {
     err.hidden = true;
@@ -128,6 +132,8 @@ export async function renderNewAnalysis(main: HTMLElement) {
       btn.textContent = "分析開始";
     }
   });
+
+  return cleanup;
 }
 
 /** 検索キーワードの表（何行でも追加・削除できる） */

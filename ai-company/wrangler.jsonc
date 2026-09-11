@@ -29,7 +29,9 @@
   "workflows": [
     { "name": "vixer-analysis-pipeline", "binding": "ANALYSIS_PIPELINE", "class_name": "AnalysisPipeline" },
     { "name": "vixer-revision-pipeline", "binding": "REVISION_PIPELINE", "class_name": "RevisionPipeline" },
-    { "name": "vixer-verification-pipeline", "binding": "VERIFICATION_PIPELINE", "class_name": "VerificationPipeline" }
+    { "name": "vixer-verification-pipeline", "binding": "VERIFICATION_PIPELINE", "class_name": "VerificationPipeline" },
+    { "name": "vixer-execution-pipeline", "binding": "EXECUTION_PIPELINE", "class_name": "ExecutionPipeline" },
+    { "name": "vixer-plan-revision-pipeline", "binding": "PLAN_REVISION_PIPELINE", "class_name": "PlanRevisionPipeline" }
   ],
 
   // 秘密でない設定。秘密情報（ANTHROPIC_API_KEY, APP_PASSWORD など）は `wrangler secret put` で登録する。

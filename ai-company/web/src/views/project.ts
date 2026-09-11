@@ -28,7 +28,10 @@ export async function renderProject(main: HTMLElement, params: Record<string, st
       lastSig = sig;
       draw(main, b, openVersions, () => load(true));
     }
-    const busy = b.project.status === "analyzing" || b.project.status === "candidates" || b.tasks.some((t) => t.status === "candidate" || t.status === "revising" || t.status === "verifying");
+    const busy =
+      b.project.status === "analyzing" ||
+      b.project.status === "candidates" ||
+      b.tasks.some((t) => ["candidate", "plan_revising", "producing", "revising", "verifying"].includes(t.status));
     window.clearTimeout(timer);
     if (busy) timer = window.setTimeout(() => load().catch(() => undefined), 3000);
   };
@@ -37,7 +40,7 @@ export async function renderProject(main: HTMLElement, params: Record<string, st
 }
 
 function signature(b: ProjectBundle): string {
-  return [b.project.status, b.project.updated_at, b.project.selected_analysts?.join(",") ?? "", ...b.analyses.map((a) => a.employee_id + a.status), b.decision?.id ?? "", ...b.tasks.map((t) => `${t.id}:${t.status}:${t.outputs.length}:${t.verification?.id ?? ""}:${t.kpis.map((k) => k.id + k.actual_value + k.confirmed).join("|")}`)].join(";");
+  return [b.project.status, b.project.updated_at, b.project.selected_analysts?.join(",") ?? "", ...b.analyses.map((a) => a.employee_id + a.status), b.decision?.id ?? "", ...b.tasks.map((t) => `${t.id}:${t.status}:${t.plan_version}:${t.outputs.length}:${t.verification?.id ?? ""}:${t.kpis.map((k) => k.id + k.actual_value + k.confirmed).join("|")}`)].join(";");
 }
 
 function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, number>, refresh: () => Promise<void>) {
@@ -102,10 +105,11 @@ function analysisBlock(a: Analysis, no: string, open: boolean): string {
   return `<details${open ? " open" : ""}><summary>${no}<span class="nm">${esc(a.employee_name)}<small>${esc((a.conclusion ?? "").slice(0, 60))}</small></span>${statusChip("completed")}</summary>
     <div class="body">
       <h4>結論</h4><p class="findings">${esc(a.conclusion ?? a.findings_md ?? "")}</p>
+      ${a.unverified_numbers.length ? `<p class="unverified">入力データに見つからない数字が含まれています: ${a.unverified_numbers.map((n) => esc(n)).join("、")}。根拠を確認してください。</p>` : ""}
       <div class="quad cols3">
         <div><h4>確認できる事実</h4>${list(a.facts)}</div>
         <div><h4>仮説（最大 3）と根拠</h4>${a.hypotheses.length ? `<ol class="hyp">${a.hypotheses.map((h) => `<li>${esc(h.hypothesis)}${h.rationale ? `<small>根拠: ${esc(h.rationale)}</small>` : ""}</li>`).join("")}</ol>` : '<p class="none">なし</p>'}</div>
-        <div><h4>根拠となった数字</h4>${evidenceTable(a.evidence)}</div>
+        <div><h4>計算結果・根拠の数字</h4>${evidenceTable(a.evidence)}</div>
         <div><h4>不足データ</h4>${list(a.missing_data)}</div>
         <div class="span2"><h4>推奨アクション（最大 3）</h4>${a.actions.length ? `<ol>${a.actions.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : '<p class="none">なし</p>'}</div>
       </div></div></details>`;
@@ -169,9 +173,15 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   const ratio = (t.impact_score / Math.max(0.5, t.effort_hours)).toFixed(2);
   const chip = t.status === "completed" && t.kpis[0]?.verdict ? `<span class="badge">${esc(VERDICT_JA[t.kpis[0].verdict] ?? "")}</span>` : statusChip(t.status);
 
-  const body = !out
-    ? `<div class="out"><div class="placeholder" style="padding:6px 0">${t.status === "failed" ? "成果物の作成に失敗しました。" : `${esc(t.executor_name)}が成果物を作成しています…`}</div></div>`
-    : `<div class="out"><div class="eyebrow"><span>${esc(t.executor_name)} の成果物</span>${t.outputs.length > 1 ? `<select data-ver="${t.id}">${t.outputs.map((o) => `<option value="${o.version}"${o.version === out.version ? " selected" : ""}>v${o.version}</option>`).join("")}</select>` : `<span>v${out.version}</span>`}</div>
+  // 成果物は「採用」後に実行担当 AI が作る。承認前は施策案だけを見せる
+  const note = (text: string) => `<div class="out"><div class="placeholder" style="padding:6px 0">${text}</div></div>`;
+  let body: string;
+  if (t.status === "candidate" || t.status === "awaiting_approval") body = note(`採用すると、${esc(t.executor_name)}がこの施策の成果物（原稿・計画・仕様書）を作ります。`);
+  else if (t.status === "plan_revising") body = note("経営司令塔が施策案を作り直しています…");
+  else if (t.status === "producing") body = note(`${esc(t.executor_name)}が成果物を作成しています…`);
+  else if (!out) body = note(t.production_error ? `成果物の作成に失敗しました: ${esc(t.production_error)}` : "成果物はまだありません。");
+  else
+    body = `<div class="out"><div class="eyebrow"><span>${esc(t.executor_name)} の成果物</span>${t.outputs.length > 1 ? `<select data-ver="${t.id}">${t.outputs.map((o) => `<option value="${o.version}"${o.version === out.version ? " selected" : ""}>v${o.version}</option>`).join("")}</select>` : `<span>v${out.version}</span>`}</div>
         ${out.revision_note ? `<p style="font-size:12px;color:var(--muted);margin:0 0 8px">修正指示: ${esc(out.revision_note)}</p>` : ""}
         <div class="md">${renderMarkdown(out.content_md)}</div>
         <div class="out-meta">${esc(out.model ?? "")}${out.input_tokens ? ` · in ${fmtNum(out.input_tokens)} / out ${fmtNum(out.output_tokens)} tokens` : ""} · ${esc(fmtDate(out.created_at, true))}</div></div>`;
@@ -179,7 +189,7 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   const kpiRows = t.kpis.length
     ? t.kpis.map((k) => `<div class="r"><span>${esc(k.name)}${k.unit ? `（${esc(k.unit)}）` : ""}</span><b>${fmtNum(k.baseline_value)}</b><b>→ ${fmtNum(k.target_value)}${k.actual_value !== null ? ` ／ 実績 ${fmtNum(k.actual_value)}` : ""}</b></div>`).join("")
     : '<div class="r"><span style="color:var(--faint)">KPI 未設定</span><b></b><b></b></div>';
-  const canEditKpi = t.status === "awaiting_approval" || t.status === "in_progress";
+  const canEditKpi = t.status === "awaiting_approval" || t.status === "in_progress" || t.status === "awaiting_verification";
   const kpi = `<div class="kpi"><div class="eyebrow" style="margin-bottom:6px;display:flex;justify-content:space-between">KPI${t.kpis[0]?.confirmed ? "（確定）" : "（AI の提案値）"}${canEditKpi ? `<button type="button" data-kpi-edit="${t.id}" style="text-decoration:underline;text-underline-offset:3px;text-transform:none;letter-spacing:.04em">編集</button>` : ""}</div>${kpiRows}
     ${canEditKpi ? kpiEditor(t) : ""}</div>`;
 
@@ -187,14 +197,22 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   switch (t.status) {
     case "awaiting_approval":
       act = `<div class="act"><button type="button" class="btn primary" data-dec="adopted" data-task="${t.id}">採用</button><button type="button" class="btn" data-dec="revise" data-task="${t.id}">修正</button><button type="button" class="btn danger" data-dec="rejected" data-task="${t.id}">却下</button></div>
-        <div class="panel" id="rev-${t.id}"><label class="f">修正指示（担当 AI が全文を作り直します）<textarea data-revnote="${t.id}" placeholder="例: 文面をもう少し短く。3 日後の LINE は不要。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rev-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-revsend="${t.id}">修正を依頼</button></div></div>
+        <div class="panel" id="rev-${t.id}"><label class="f">施策案の修正指示（経営司令塔が案を作り直します）<textarea data-revnote="${t.id}" placeholder="例: 期間を 2 週間に短縮したい。LINE ではなく来館時の声かけで。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rev-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-revsend="${t.id}">修正を依頼</button></div></div>
         <div class="panel" id="rej-${t.id}"><label class="f">却下の理由（ナレッジに残ります）<textarea data-rejnote="${t.id}" placeholder="例: 今は人手が足りない。来月再検討。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rej-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-rejsend="${t.id}">却下する</button></div></div>`;
       break;
+    case "plan_revising":
+      act = `<div class="note-box"><span class="badge">施策案を修正中</span><span>経営司令塔が修正指示を反映した案を作っています…</span></div>`;
+      break;
+    case "producing":
+      act = `<div class="note-box"><span class="badge">採用</span><span>${esc(t.executor_name)}に引き継ぎました。成果物を作成しています…</span></div>`;
+      break;
     case "revising":
-      act = `<div class="note-box"><span class="badge">修正中</span><span>${esc(t.executor_name)}が次の版を作成しています…</span></div>`;
+      act = `<div class="note-box"><span class="badge">修正中</span><span>${esc(t.executor_name)}が成果物の次の版を作成しています…</span></div>`;
       break;
     case "in_progress":
-      act = `<div class="note-box"><span class="badge">採用</span><span>実行中です。実施が終わったら「実施した」を押してください。</span></div><div class="act"><button type="button" class="btn" data-implemented="${t.id}">実施した</button></div>`;
+      act = `<div class="note-box"><span class="badge">採用</span><span>${t.production_error ? "成果物の作成に失敗しました。再依頼できます。" : "実行中です。実施が終わったら「実施した」を押してください。"}</span></div>
+        <div class="act">${t.production_error ? `<button type="button" class="btn primary" data-retryprod="${t.id}">成果物を再作成</button>` : `<button type="button" class="btn" data-reviseout="${t.id}">成果物を修正</button>`}<button type="button" class="btn" data-implemented="${t.id}">実施した</button></div>
+        <div class="panel" id="revout-${t.id}"><label class="f">成果物の修正指示（${esc(t.executor_name)}が作り直します）<textarea data-revoutnote="${t.id}" placeholder="例: 文面をもう少し短く。3 日後の連絡は不要。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="revout-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-revoutsend="${t.id}">修正を依頼</button></div></div>`;
       break;
     case "verifying":
       act = `<div class="note-box"><span class="badge">検証中</span><span>KPI 検証担当が施策前・目標・施策後を比較しています…</span></div>`;
@@ -232,7 +250,8 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
       <dt>人間側</dt><dd>${esc(t.human_owner ?? "代表")}</dd>
       <dt>期限</dt><dd>${t.duration_days ? `${t.duration_days} 日` : "—"}${t.due_date ? `（${esc(t.due_date)} まで）` : ""}</dd>
       <dt>評価</dt><dd class="score">インパクト ${t.impact_score}/5 · 難易度 ${t.difficulty ?? "—"}/5 · 時間 ${t.effort_hours} h · コスト ${esc(t.cost_estimate ?? "不明")} · 比 ${ratio}</dd>
-      <dt>優先理由</dt><dd>${esc(t.reasoning)}</dd></dl>
+      <dt>優先理由</dt><dd>${esc(t.reasoning)}</dd>
+      ${t.plan_version > 1 ? `<dt>施策案</dt><dd>第 ${t.plan_version} 版${t.plan_change_note ? ` — ${esc(t.plan_change_note)}` : ""}</dd>` : ""}</dl>
     ${t.restricted_actions.length ? `<span class="flag">代表承認が必要: ${t.restricted_actions.map((r) => esc(RESTRICTED_JA[r] ?? r)).join("・")}</span>` : ""}</div>${body}${kpi}${act}</div>`;
 }
 
@@ -281,18 +300,25 @@ function bind(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       if (el.dataset.dec === "revise") { main.querySelector<HTMLElement>(`#rej-${id}`)!.dataset.open = "0"; const p = main.querySelector<HTMLElement>(`#rev-${id}`)!; p.dataset.open = "1"; p.querySelector("textarea")?.focus(); return; }
       if (el.dataset.dec === "rejected") { main.querySelector<HTMLElement>(`#rev-${id}`)!.dataset.open = "0"; const p = main.querySelector<HTMLElement>(`#rej-${id}`)!; p.dataset.open = "1"; p.querySelector("textarea")?.focus(); return; }
       const editorOpen = main.querySelector<HTMLElement>(`#kpiedit-${id}`)?.dataset.open === "1";
-      run(() => api.post(`/api/tasks/${id}/approval`, { decision: "adopted", kpis: editorOpen ? readKpis(id) : undefined }), "採用しました。KPI を確定し「実行中」にしました。");
+      run(() => api.post(`/api/tasks/${id}/approval`, { decision: "adopted", kpis: editorOpen ? readKpis(id) : undefined }), "採用しました。担当 AI に引き継ぎ、成果物を作成しています。");
     }),
   );
   q<HTMLElement>("[data-revsend]").forEach((el) => el.addEventListener("click", () => {
     const note = val(`[data-revnote="${el.dataset.revsend}"]`).trim();
     if (!note) return toast("修正指示を入力してください。");
-    run(() => api.post(`/api/tasks/${el.dataset.revsend}/approval`, { decision: "revise", note }), "修正を依頼しました。担当 AI が次の版を作成します。");
+    run(() => api.post(`/api/tasks/${el.dataset.revsend}/approval`, { decision: "revise", note }), "修正を依頼しました。経営司令塔が施策案を作り直します。");
   }));
   q<HTMLElement>("[data-rejsend]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.rejsend}/approval`, { decision: "rejected", note: val(`[data-rejnote="${el.dataset.rejsend}"]`) }), "却下しました。ナレッジに保存しました。")));
   q<HTMLElement>("[data-implemented]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.implemented}/status`, { status: "awaiting_verification" }), "「検証待ち」にしました。期日に KPI を入力してください。")));
   q<HTMLElement>("[data-back]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.back}/status`, { status: "in_progress" }))));
   q<HTMLElement>("[data-seg] button").forEach((btn) => btn.addEventListener("click", () => { btn.parentElement!.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === btn))); }));
+  q<HTMLElement>("[data-reviseout]").forEach((el) => el.addEventListener("click", () => { const p = main.querySelector<HTMLElement>(`#revout-${el.dataset.reviseout}`)!; p.dataset.open = "1"; p.querySelector("textarea")?.focus(); }));
+  q<HTMLElement>("[data-revoutsend]").forEach((el) => el.addEventListener("click", () => {
+    const n = val(`[data-revoutnote="${el.dataset.revoutsend}"]`).trim();
+    if (!n) return toast("修正指示を入力してください。");
+    run(() => api.post(`/api/tasks/${el.dataset.revoutsend}/revise-output`, { note: n }), "成果物の修正を依頼しました。");
+  }));
+  q<HTMLElement>("[data-retryprod]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.retryprod}/retry-production`), "成果物の作成を再依頼しました。")));
   q<HTMLElement>("[data-verai]").forEach((el) => el.addEventListener("click", () => {
     const id = el.dataset.verai!;
     const kpis = [...q<HTMLInputElement>(`#ver-${id} [data-actual]`)].map((i) => ({ id: i.dataset.actual!, actual_value: num(i.value) }));

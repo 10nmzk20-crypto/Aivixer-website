@@ -27,6 +27,7 @@ const usage = (): GenerateUsage => ({ model: "mock", inputTokens: 1200, outputTo
 
 function pick(system: string, user: string): unknown {
   if (/分析部 8 人のうち今回必要な担当/.test(system)) return select(user);
+  if (/修正指示を反映した新しい施策案を 1 件だけ/.test(user)) return revisedTask(user);
   if (/ViXer で最も重要な AI 社員/.test(system)) return SYNTHESIS;
   if (/KPI 検証担当/.test(system)) return VERIFICATION;
   const name = /あなたは「([^」]+担当)」/.exec(system)?.[1] ?? "分析担当";
@@ -59,6 +60,20 @@ function select(user: string) {
   if (/退会|休眠|来館/.test(t) && !/見学|お試し/.test(t)) return { category: "継続", analysts: ["customer", "data", "product"], reason: "退会・継続に関する相談のため、継続・全体数値・商品構成の 3 名を招集しました。（固定回答）" };
   if (/Google|検索|流入|MEO|SEO|口コミ/i.test(t)) return { category: "集客", analysts: ["marketing", "web", "competitor"], reason: "検索・Google からの流入に関する相談のため、集客・Web・競合の 3 名を招集しました。（固定回答）" };
   return { category: "入会導線", analysts: ["data", "sales", "customer"], reason: "見学から 30 日お試しへの転換に関する相談のため、全体数値・入会導線・継続の 3 名を招集しました。（固定回答）" };
+}
+
+/** 代表の修正指示を受けた施策案の作り直し（固定回答） */
+function revisedTask(user: string) {
+  const rank = Number(/優先順位 (\d+)/.exec(user)?.[1] ?? 1);
+  const title = /題名: (.+)/.exec(user)?.[1]?.trim() ?? "施策";
+  const executor = /担当 AI: (.+)/.exec(user)?.[1]?.trim() ?? "";
+  const executorId = { "LINE・営業担当": "line", 集客実行担当: "growth", 会員継続担当: "retention", 企画設計担当: "planner", コンテンツ制作担当: "content", "Web 実装担当": "webdev" }[executor] ?? "planner";
+  const note = /【代表からの修正指示】\n(.+)/.exec(user)?.[1]?.trim() ?? "";
+  const base = SYNTHESIS.tasks.find((t) => t.rank === rank) ?? SYNTHESIS.tasks[0];
+  return {
+    task: { ...base, rank, title: `${title}（修正版）`, executor_employee_id: executorId, what_to_do: `${base.what_to_do}\n代表の指示「${note}」を反映しました。（固定回答）`, priority_reason: `${base.priority_reason} 代表の修正指示を反映しています。` },
+    change_note: `代表の指示「${note}」に合わせて内容を調整しました。（固定回答）`,
+  };
 }
 
 function analysis(name: string) {

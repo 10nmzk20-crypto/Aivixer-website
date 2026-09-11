@@ -61,6 +61,13 @@ export const TaskProposalSchema = z.object({
 });
 export type TaskProposal = z.infer<typeof TaskProposalSchema>;
 
+/** 代表の修正指示を受けて、施策 1 件を作り直す */
+export const TaskRevisionSchema = z.object({
+  task: TaskProposalSchema,
+  change_note: z.string().describe("前の案から何をどう変えたか（1〜2 文）"),
+});
+export type TaskRevisionResult = z.infer<typeof TaskRevisionSchema>;
+
 export const SynthesisSchema = z.object({
   top_issue: z.string().describe("【今月の最重要課題】1〜2 文"),
   reasoning: z.string().describe("【そう判断した理由】分析担当の結果と数字を根拠に 3〜6 文"),

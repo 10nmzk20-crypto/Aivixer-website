@@ -471,3 +471,21 @@ Step 4  実行部（施策ごとに担当 AI が成果物を作る）
 **Phase 5: 招集と統合**
 - 司令塔の招集プロンプトに、ファネル判定の「問題あり」段階から招集先を決めるルールを追加（検索・MEO → マーケ / Web / 競合、HP 内 → Web / マーケ、見学以降 → 営業 / 継続 / 商品）。
 - マーケ分析担当のプロンプトに、ViXer の集客導線とファネル判断の型（露出低下 / HP の訴求 / 見学後の営業 / お試し中のサポート）を追加。結論に「集客総合評価」と「最も問題がある場所」を必ず含める。
+
+## 16. 採用 → 実行担当への引き継ぎ（MVP を実運用に）
+
+**成果物を作るタイミングの変更**
+- 分析パイプラインは施策案（最大 3 件）を作った時点で止まり、`awaiting_approval` にする。成果物は作らない。
+- 代表が「採用」を押すと `ExecutionPipeline` が起動し、担当の実行 AI が成果物を作る（`producing` → `in_progress`）。
+- 「修正」は `PlanRevisionPipeline` を起動し、経営司令塔が施策案そのものを作り直す（`plan_revising` → `awaiting_approval`、`plan_version` が増える）。
+- 成果物ができた後の修正は `POST /api/tasks/:id/revise-output`（`RevisionPipeline`）。作成に失敗したときは `POST /api/tasks/:id/retry-production` で再依頼。
+- 施策の状態: candidate → awaiting_approval → (採用) producing → in_progress → awaiting_verification → verifying → completed / rejected。修正系は plan_revising と revising。
+
+**数字の捏造防止（`src/analysis/verify-numbers.ts`）**
+- AI の結論・事実・根拠の数字を、入力値・計算済み KPI・キーワードの数字・入力値どうしの和と突き合わせる。
+- 見つからない数字は `analyses.unverified_json` に保存し、案件詳細に警告として表示する。年号や小さい序数は照合対象から除く。
+
+**本番での固定回答の禁止（`src/ai/provider.ts`）**
+- `ENVIRONMENT` が `development` 以外で `AI_PROVIDER=mock` なら、分析開始時に再試行なしのエラーにする。
+
+`migrations/0007` は列の追加のみ（tasks に plan_version / plan_change_note / production_error / adopted_at、analyses に unverified_json）。

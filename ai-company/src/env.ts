@@ -7,6 +7,8 @@ export interface Env {
   ANALYSIS_PIPELINE: Workflow<AnalysisPipelineParams>;
   REVISION_PIPELINE: Workflow<RevisionPipelineParams>;
   VERIFICATION_PIPELINE: Workflow<VerificationPipelineParams>;
+  EXECUTION_PIPELINE: Workflow<ExecutionPipelineParams>;
+  PLAN_REVISION_PIPELINE: Workflow<PlanRevisionPipelineParams>;
 
   ENVIRONMENT?: string; // 'development' | 'production'
   AI_PROVIDER?: string; // 'anthropic' | 'mock'
@@ -37,4 +39,15 @@ export interface RevisionPipelineParams {
 
 export interface VerificationPipelineParams {
   taskId: string;
+}
+
+/** 採用された施策を実行担当 AI に渡して成果物を作らせる */
+export interface ExecutionPipelineParams {
+  taskId: string;
+}
+
+/** 代表の修正指示を受けて、経営司令塔が施策案を作り直す */
+export interface PlanRevisionPipelineParams {
+  taskId: string;
+  note: string;
 }

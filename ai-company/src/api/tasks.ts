@@ -7,7 +7,7 @@ import { employeeName } from "../employees/roster";
 export function taskRoutes() {
   const r = new Hono<{ Bindings: Env }>();
 
-  /** 採用 / 修正 / 却下 */
+  /** 採用 / 修正 / 却下（施策案の段階で代表が判断する） */
   r.post("/tasks/:id/approval", async (c) => {
     const repo = new Repo(c.env.DB);
     const task = await repo.getTask(c.req.param("id"));
@@ -19,16 +19,18 @@ export function taskRoutes() {
     if (task.status !== "awaiting_approval") return c.json({ error: "bad_state", message: "承認待ちの施策だけ判断できます。" }, 400);
     if (decision === "revise" && !note) return c.json({ error: "note_required", message: "修正指示を入力してください。" }, 400);
 
-    const latest = await repo.latestOutput(task.id);
-    await repo.createApproval({ task_id: task.id, output_id: latest?.id ?? null, decision, note });
+    await repo.createApproval({ task_id: task.id, output_id: null, decision, note });
 
     if (decision === "adopted") {
+      // KPI を確定してから、担当の実行 AI に成果物を作らせる
       if (body.kpis?.length) await repo.replaceKpis(task.id, normalizeKpis(body.kpis), true);
       else for (const k of await repo.listKpis(task.id)) await repo.updateKpi(k.id, { confirmed: 1 });
-      await repo.updateTask(task.id, { status: "in_progress" });
+      await repo.updateTask(task.id, { status: "producing", adopted_at: new Date().toISOString(), production_error: null });
+      await c.env.EXECUTION_PIPELINE.create({ params: { taskId: task.id } });
     } else if (decision === "revise") {
-      await repo.updateTask(task.id, { status: "revising" });
-      await c.env.REVISION_PIPELINE.create({ params: { taskId: task.id, note: note! } });
+      // 経営司令塔が施策案そのものを作り直す
+      await repo.updateTask(task.id, { status: "plan_revising" });
+      await c.env.PLAN_REVISION_PIPELINE.create({ params: { taskId: task.id, note: note! } });
     } else {
       await repo.updateTask(task.id, { status: "rejected" });
       await repo.createKnowledge({
@@ -44,6 +46,33 @@ export function taskRoutes() {
     }
     const projectStatus = await repo.recomputeProjectStatus(task.project_id);
     return c.json({ ok: true, task: await repo.getTask(task.id), project_status: projectStatus });
+  });
+
+  /** 成果物の修正を実行担当 AI に依頼する（採用後、成果物ができてから） */
+  r.post("/tasks/:id/revise-output", async (c) => {
+    const repo = new Repo(c.env.DB);
+    const task = await repo.getTask(c.req.param("id"));
+    if (!task) return c.json({ error: "not_found" }, 404);
+    if (task.status !== "in_progress") return c.json({ error: "bad_state", message: "実行中の施策だけ成果物を修正できます。" }, 400);
+    const body = await c.req.json<{ note?: string }>();
+    const note = (body.note ?? "").trim();
+    if (!note) return c.json({ error: "note_required", message: "修正指示を入力してください。" }, 400);
+    const latest = await repo.latestOutput(task.id);
+    await repo.createApproval({ task_id: task.id, output_id: latest?.id ?? null, decision: "revise", note });
+    await repo.updateTask(task.id, { status: "revising" });
+    await c.env.REVISION_PIPELINE.create({ params: { taskId: task.id, note } });
+    return c.json({ ok: true, task: await repo.getTask(task.id) });
+  });
+
+  /** 成果物の作成に失敗したとき、実行担当 AI に再依頼する */
+  r.post("/tasks/:id/retry-production", async (c) => {
+    const repo = new Repo(c.env.DB);
+    const task = await repo.getTask(c.req.param("id"));
+    if (!task) return c.json({ error: "not_found" }, 404);
+    if (task.status !== "in_progress" || !task.production_error) return c.json({ error: "bad_state", message: "成果物の作成に失敗した施策だけ再依頼できます。" }, 400);
+    await repo.updateTask(task.id, { status: "producing", production_error: null });
+    await c.env.EXECUTION_PIPELINE.create({ params: { taskId: task.id } });
+    return c.json({ ok: true, task: await repo.getTask(task.id) });
   });
 
   /** 「実施した」→ 検証待ち */

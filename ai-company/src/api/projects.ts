@@ -102,6 +102,7 @@ export function projectRoutes() {
         evidence: a.evidence_json ? JSON.parse(a.evidence_json) : [],
         missing_data: a.needed_data_json ? JSON.parse(a.needed_data_json) : [],
         actions: a.actions_json ? JSON.parse(a.actions_json) : [],
+        unverified_numbers: a.unverified_json ? JSON.parse(a.unverified_json) : [],
       })),
       decision: decision
         ? {

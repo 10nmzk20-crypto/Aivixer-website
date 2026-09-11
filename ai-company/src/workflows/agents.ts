@@ -2,7 +2,7 @@ import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../env";
 import { Repo, type ProjectRow, type TaskRow } from "../db/repo";
 import { AiProviderError, getProvider, type AiProvider } from "../ai/provider";
-import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, VerificationSchema } from "../ai/schemas";
+import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema } from "../ai/schemas";
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
 import { detectRestrictedActions } from "../policy/restricted-actions";
@@ -10,6 +10,7 @@ import { METRIC_GROUPS, SOURCE_LABEL, metricLabel, normalizeInputData, type Norm
 import { computeDerived, totalBookings, type DerivedKpi } from "../analysis/derived";
 import type { ComparisonResult } from "../analysis/compare";
 import { FUNNEL_STATUS_JA, type FunnelResult } from "../analysis/funnel";
+import { checkNumbers } from "../analysis/verify-numbers";
 
 /**
  * AI 社員に仕事をさせる関数のまとめ。Workflow の各ステップから呼ばれる。
@@ -236,6 +237,11 @@ export async function runAnalyst(env: Env, projectId: string, employeeId: string
       user: `${formatInput(project)}\n\n${await knowledgeContext(repo, `${project.input_text} ${project.title}`)}\n\nあなたの担当分野の観点で分析してください。`,
       schema: AnalysisSchema,
     });
+    // AI が挙げた数字が入力値か計算済み KPI に実在するかを確かめる
+    const input = normalizeInputData(project.input_data_json ? JSON.parse(project.input_data_json) : null);
+    const kpis = project.derived_json ? (JSON.parse(project.derived_json) as { kpis: DerivedKpi[] }).kpis : computeDerived(input);
+    const check = checkNumbers([data.conclusion, ...data.facts, ...data.evidence.map((e) => `${e.value} ${e.source}`)], input, kpis);
+
     await repo.completeAnalysis(projectId, employeeId, {
       conclusion: data.conclusion,
       facts: data.facts,
@@ -243,6 +249,7 @@ export async function runAnalyst(env: Env, projectId: string, employeeId: string
       evidence: data.evidence,
       missing_data: data.missing_data,
       actions: data.actions.slice(0, 3),
+      unverified_numbers: check.unverified,
       model: usage.model,
       input_tokens: usage.inputTokens,
       output_tokens: usage.outputTokens,
@@ -327,7 +334,9 @@ export async function synthesize(env: Env, projectId: string): Promise<string[]>
     if (p.kpis.length) await repo.replaceKpis(task.id, p.kpis.slice(0, 3), false);
     ids.push(task.id);
   }
-  await repo.updateProject(projectId, { status: "candidates" });
+  // 施策案がそろった時点で代表の承認待ちにする。成果物は「採用」後に実行担当が作る
+  for (const id of ids) await repo.updateTask(id, { status: "awaiting_approval" });
+  await repo.updateProject(projectId, { status: "awaiting_approval" });
   return ids;
 }
 
@@ -337,9 +346,16 @@ export async function produceOutput(env: Env, taskId: string, revisionNote: stri
   const task = await repo.getTask(taskId);
   if (!task) throw new NonRetryableError("施策が見つかりません。");
   const previous = await repo.latestOutput(taskId);
-  // 初回作成で既に成果物があれば飛ばす。修正依頼のときは、同じ指示の版がまだ無いときだけ作る。
-  if (!revisionNote && previous) return previous.id;
+  // 初回作成で既に成果物があれば飛ばす（再実行時）。修正依頼は、同じ指示の版がまだ無いときだけ作る
+  if (!revisionNote && previous && task.status !== "producing") return previous.id;
+  if (!revisionNote && previous && task.status === "producing") {
+    await repo.updateTask(taskId, { status: "in_progress", production_error: null });
+    return previous.id;
+  }
   if (revisionNote && previous?.revision_note === revisionNote && task.status !== "revising") return previous.id;
+  if (!revisionNote && task.status !== "producing" && task.status !== "in_progress") {
+    throw new NonRetryableError("採用されていない施策の成果物は作りません。");
+  }
 
   const project = await repo.getProject(task.project_id);
   const decision = await repo.getLatestDecision(task.project_id);
@@ -372,12 +388,72 @@ export async function produceOutput(env: Env, taskId: string, revisionNote: stri
       input_tokens: usage.inputTokens,
       output_tokens: usage.outputTokens,
     });
-    await repo.updateTask(taskId, { status: "awaiting_approval" });
+    // 採用済みの施策なので、成果物ができたら「実行中」にする
+    await repo.updateTask(taskId, { status: "in_progress", production_error: null });
     return out.id;
   } catch (err) {
     const e = asWorkflowError(err);
-    if (e instanceof NonRetryableError) await repo.updateTask(taskId, { status: "failed" });
+    if (e instanceof NonRetryableError) await repo.updateTask(taskId, { status: "in_progress", production_error: e.message.slice(0, 500) });
     throw e;
+  }
+}
+
+// ---------- 代表の修正指示を受けて、司令塔が施策案を作り直す ----------
+export async function revisePlan(env: Env, taskId: string, note: string): Promise<string> {
+  const repo = new Repo(env.DB);
+  const task = await repo.getTask(taskId);
+  if (!task) throw new NonRetryableError("施策が見つかりません。");
+  if (task.status !== "plan_revising") return taskId; // すでに作り直し済み（再実行時）
+
+  const [project, decision, kpis, siblings] = await Promise.all([
+    repo.getProject(task.project_id),
+    repo.getLatestDecision(task.project_id),
+    repo.listKpis(taskId),
+    repo.listTasks(task.project_id),
+  ]);
+  const others = siblings.filter((t) => t.id !== taskId).map((t) => `- 優先順位 ${t.rank}: ${t.title}`).join("\n") || "（他の施策なし）";
+  const kpiText = kpis.map((k) => `- ${k.name}${k.unit ? `（${k.unit}）` : ""}: 現状 ${k.baseline_value ?? "不明"} → 目標 ${k.target_value ?? "未設定"}`).join("\n") || "- （未設定）";
+  const executors = EXECUTOR_IDS.map((id) => `- ${id}: ${EMPLOYEE_MAP[id].name}`).join("\n");
+
+  const user = [
+    project ? formatInput(project) : "",
+    decision ? `【あなたが出した最重要課題】${decision.top_issue ?? decision.summary_md}` : "",
+    `【作り直す施策（現在の案・第 ${task.plan_version} 版）】\n題名: ${task.title}\n目的: ${task.objective}\n具体的に何をするか: ${task.what_to_do ?? "（未記載）"}\n担当 AI: ${employeeName(task.executor_employee_id)}\n人間側の担当: ${task.human_owner ?? "代表"}\n期限: ${task.duration_days ?? "未定"} 日 / 必要時間: ${task.effort_hours} h / 難易度: ${task.difficulty ?? "不明"} / コスト: ${task.cost_estimate ?? "不明"}\n優先理由: ${task.reasoning}\nKPI:\n${kpiText}`,
+    `【同じ案件の他の施策（重複しないように）】\n${others}`,
+    `【代表からの修正指示】\n${note}`,
+    `【施策の担当に選べる実行 AI】\n${executors}`,
+    "修正指示を反映した新しい施策案を 1 件だけ作ってください。rank は変えないでください。change_note に前の案から何を変えたかを書いてください。",
+  ].filter(Boolean).join("\n\n");
+
+  const ai = provider(env);
+  try {
+    const { data } = await ai.generateJSON({ system: system("commander"), user, schema: TaskRevisionSchema, maxTokens: 4000 });
+    const p = data.task;
+    const executor = EXECUTOR_IDS.includes(p.executor_employee_id) ? p.executor_employee_id : task.executor_employee_id;
+    await repo.updateTask(taskId, {
+      title: p.title,
+      objective: p.objective,
+      reasoning: p.priority_reason,
+      what_to_do: p.what_to_do,
+      human_owner: p.human_owner,
+      duration_days: clamp(Math.round(p.duration_days), 1, 365),
+      effort_hours: Math.max(0.5, Number(p.effort_hours) || 1),
+      impact_score: clamp(Math.round(p.impact_score), 1, 5),
+      difficulty: clamp(Math.round(p.difficulty), 1, 5),
+      cost_estimate: p.cost_estimate,
+      executor_employee_id: executor,
+      assignment_reason: p.assignment_reason,
+      restricted_actions_json: JSON.stringify(detectRestrictedActions(`${p.title}\n${p.objective}\n${p.what_to_do}\n${p.priority_reason}`, p.restricted_actions)),
+      due_date: dueDate(p.duration_days),
+      plan_version: task.plan_version + 1,
+      plan_change_note: data.change_note,
+      status: "awaiting_approval",
+    });
+    if (p.kpis.length) await repo.replaceKpis(taskId, p.kpis.slice(0, 3), false);
+    await repo.recomputeProjectStatus(task.project_id);
+    return taskId;
+  } catch (err) {
+    throw asWorkflowError(err);
   }
 }
 
