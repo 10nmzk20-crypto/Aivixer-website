@@ -8,6 +8,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { background: var(--bg); }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); font-weight: 300; font-size: 15px; line-height: 1.7; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
 a { color: inherit; text-decoration: none; }
@@ -415,3 +416,48 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 
 /* 入力ブロックの担当名。1 ブロック 1 担当なので、誰が見る数字かを見出しに出す */
 .block summary .nm .owner { margin-left: 9px; font-size: 10px; letter-spacing: .08em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 2px; padding: 2px 7px; white-space: nowrap; font-weight: 300; }
+
+/* ===== 分析結果（MVP）===== */
+.headline { margin: 0 0 16px; font-size: 15px; color: var(--text); line-height: 1.75; }
+.sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+/* 今月やるべきこと */
+.acts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.act { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 14px; align-items: start; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 15px 16px; }
+.act:first-child { border-color: var(--line-strong); }
+.act-no { font-family: var(--display); font-size: 27px; line-height: 1; color: var(--muted); text-align: center; padding-top: 2px; }
+.act:first-child .act-no { color: var(--text); }
+.act-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.act-do { margin: 0; font-size: 15px; line-height: 1.75; }
+.act-why { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.7; border-left: 1px solid var(--line-strong); padding-left: 11px; }
+.act-why span { display: block; font-size: 10px; letter-spacing: .12em; color: var(--faint); margin-bottom: 2px; }
+.act-from { margin: 0; font-size: 11px; color: var(--faint); }
+.nodata { margin: 12px 0 0; font-size: 12px; color: var(--faint); }
+
+/* 担当ごとの分析 */
+.revs { display: flex; flex-direction: column; gap: 8px; }
+.rev { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.rev[data-verdict="problem"] { border-color: var(--line-strong); }
+.rev[data-verdict="no_data"] { opacity: .62; }
+.rev > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
+.rev > summary::-webkit-details-marker { display: none; }
+.rev > summary:hover { background: var(--surface-2); }
+.rev-name { font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.rev-weak { font-size: 10px; letter-spacing: .08em; background: var(--accent); color: #0A0A0A; border-radius: 2px; padding: 2px 7px; white-space: nowrap; }
+.rev-q { grid-column: 1; font-size: 12px; color: var(--muted); }
+.rev-v { grid-column: 2; grid-row: 1 / span 2; justify-self: end; font-size: 11px; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 2px; padding: 3px 9px; white-space: nowrap; align-self: center; }
+.rev[data-verdict="problem"] .rev-v { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.rev[data-verdict="good"] .rev-v { color: var(--text-2); border-color: var(--text-2); }
+.rev-body { padding: 2px 16px 16px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--line); margin-top: 2px; padding-top: 15px; }
+.rev-part h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
+.rev-part ul { margin: 0; padding-left: 17px; font-size: 13px; color: var(--text-2); line-height: 1.8; }
+.rev-part ul.dim li, .rev-part p.dim { color: var(--faint); }
+.rev-part p.dim { margin: 0; font-size: 13px; }
+.fnd { border-left: 1px solid var(--line-strong); padding-left: 12px; margin-bottom: 12px; }
+.fnd:last-child { margin-bottom: 0; }
+.fnd-p { margin: 0 0 7px; font-size: 13.5px; line-height: 1.75; }
+.fnd-f { margin: 0; font-size: 13px; color: var(--text-2); line-height: 1.75; }
+.fnd-f span { display: inline-block; font-size: 10px; letter-spacing: .12em; color: var(--faint); margin-right: 8px; vertical-align: 1px; }
+
+.report-card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.report-card .r { display: flex; gap: 8px; flex-wrap: wrap; }

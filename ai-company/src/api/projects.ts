@@ -6,6 +6,7 @@ import { GROUP_OWNER, METRIC_GROUPS, NOTE_FIELDS, normalizeInputData } from "../
 import { computeDerived, withKeywordCtr } from "../analysis/derived";
 import { compare, toPeriodKey, type HistoryEntry } from "../analysis/compare";
 import { diagnoseFunnel } from "../analysis/funnel";
+import { reviewAll } from "../analysis/tool-review";
 
 /** 案件（1 回の「分析開始」）の作成・取得 */
 export function projectRoutes() {
@@ -66,6 +67,10 @@ export function projectRoutes() {
     const comparison = compare(input, periodKey, history);
     const funnel = diagnoseFunnel(input, comparison);
 
+    // 5 人分の「現状・傾向・問題点・改善案」と「今月やるべきこと」をここで組み立てる。
+    // 外部 AI を呼ばないので、保存した時点で分析は終わっている。
+    const review = reviewAll(input, comparison);
+
     const project = await repo.createProject({
       title,
       period_label: period,
@@ -76,85 +81,28 @@ export function projectRoutes() {
       analyst_mode: body.analyst_mode === "all" ? "all" : "auto",
       derived: { kpis: computeDerived(input), comparison },
       funnel,
+      review,
+      status: "reviewed",
     });
-
-    const instance = await c.env.ANALYSIS_PIPELINE.create({ params: { projectId: project.id } });
-    await repo.updateProject(project.id, { workflow_instance_id: instance.id });
-    return c.json({ project: { ...project, workflow_instance_id: instance.id } }, 201);
+    return c.json({ project }, 201);
   });
 
   r.get("/projects/:id", async (c) => {
     const repo = new Repo(c.env.DB);
-    const current = await repo.getProject(c.req.param("id"));
-    if (current) await syncWithWorkflow(c.env, repo, current);
-    const bundle = await repo.getProjectBundle(c.req.param("id"));
-    if (!bundle) return c.json({ error: "not_found", message: "案件が見つかりません。" }, 404);
-    const names = Object.fromEntries(EMPLOYEES.map((e) => [e.id, e.name]));
-    const { project, analyses, decision, tasks } = bundle;
+    const project = await repo.getProject(c.req.param("id"));
+    if (!project) return c.json({ error: "not_found", message: "案件が見つかりません。" }, 404);
     return c.json({
       project: {
         ...project,
         input_data: project.input_data_json ? normalizeInputData(JSON.parse(project.input_data_json)) : null,
-        selected_analysts: project.selected_analysts_json ? JSON.parse(project.selected_analysts_json) : null,
         derived: project.derived_json ? JSON.parse(project.derived_json) : null,
         funnel: project.funnel_json ? JSON.parse(project.funnel_json) : null,
+        review: project.review_json ? JSON.parse(project.review_json) : null,
       },
-      analyses: analyses.map((a) => ({
-        ...a,
-        employee_name: names[a.employee_id] ?? a.employee_id,
-        conclusion: a.headline,
-        facts: a.facts_json ? JSON.parse(a.facts_json) : [],
-        hypotheses: (a.hypotheses_json ? (JSON.parse(a.hypotheses_json) as Array<string | { hypothesis: string; rationale: string }>) : []).map((h) => (typeof h === "string" ? { hypothesis: h, rationale: "" } : h)),
-        evidence: a.evidence_json ? JSON.parse(a.evidence_json) : [],
-        missing_data: a.needed_data_json ? JSON.parse(a.needed_data_json) : [],
-        actions: a.actions_json ? JSON.parse(a.actions_json) : [],
-        unverified_numbers: a.unverified_json ? JSON.parse(a.unverified_json) : [],
-      })),
-      decision: decision
-        ? {
-            ...decision,
-            top_issue: decision.top_issue ?? decision.summary_md,
-            reasoning_md: decision.reasoning_md ?? "",
-            evidence: decision.evidence_json ? JSON.parse(decision.evidence_json) : [],
-            needed_data: JSON.parse(decision.needed_data_json),
-            not_now: JSON.parse(decision.not_now_json),
-          }
-        : null,
-      roster: {
-        analysts: (project.selected_analysts_json ? (JSON.parse(project.selected_analysts_json) as string[]) : []).map((id) => ({ id, name: names[id] ?? id })),
-        commander: { id: "commander", name: names.commander },
-        executors: [...new Set(tasks.map((t) => t.executor_employee_id))].map((id) => ({ id, name: names[id] ?? id })),
-      },
-      tasks: tasks.map((t) => ({
-        ...t,
-        executor_name: names[t.executor_employee_id] ?? t.executor_employee_id,
-        restricted_actions: JSON.parse(t.restricted_actions_json),
-        leverage: {
-          type: t.task_type ?? null,
-          type_note: t.type_note,
-          initial_hours: t.initial_hours,
-          ongoing_hours: t.ongoing_hours,
-          automation: t.automation_score,
-          asset: t.asset_score,
-          self_service: t.self_service,
-          staff_dependency: t.staff_dependency,
-          owner_dependency: t.owner_dependency,
-          human_work_change: t.human_work_change,
-          human_work_note: t.human_work_note,
-          manual_reason: t.manual_reason,
-          score: t.leverage_score,
-          formula: t.leverage_formula,
-          warning: t.leverage_warning,
-        },
-        frames: t.frames_json
-          ? { ...(JSON.parse(t.frames_json) as object), sunzi_note: t.sunzi_note, confucius_note: t.confucius_note, warning: t.frame_warning }
-          : null,
-        verification: t.verification ? { ...t.verification, kpis_snapshot: JSON.parse(t.verification.kpis_snapshot_json) } : null,
-      })),
     });
   });
 
-  /** 分析を中止する（止まってしまったときの逃げ道）。中止後は「続きから再実行」できる */
+
   r.post("/projects/:id/cancel", async (c) => {
     const repo = new Repo(c.env.DB);
     const project = await repo.getProject(c.req.param("id"));

@@ -3,13 +3,12 @@ import { renderDashboard } from "./views/dashboard";
 import { renderNewAnalysis } from "./views/new-analysis";
 import { renderProject } from "./views/project";
 import { renderHistory } from "./views/history";
-import { renderKnowledge } from "./views/knowledge";
 import { renderLogin } from "./views/login";
 import { openEmployeeSheet, setupSheet } from "./views/employee";
 import { errorBox } from "./components";
 
 /**
- * 画面の切り替え（#/ , #/new , #/projects/:id , #/history , #/knowledge）。
+ * 画面の切り替え（#/ , #/new , #/projects/:id , #/history）。MVP はこの 4 つだけ。
  * 各画面は render(main) を返し、離れるときに cleanup を呼ぶ（ポーリング停止など）。
  */
 export type Cleanup = () => void;
@@ -20,7 +19,6 @@ const routes: Array<{ pattern: RegExp; name: string; view: View }> = [
   { pattern: /^\/new$/, name: "new", view: renderNewAnalysis },
   { pattern: /^\/projects\/([^/]+)$/, name: "project", view: (m, p) => renderProject(m, p) },
   { pattern: /^\/history$/, name: "history", view: renderHistory },
-  { pattern: /^\/knowledge$/, name: "knowledge", view: renderKnowledge },
 ];
 
 let cleanup: Cleanup | void;

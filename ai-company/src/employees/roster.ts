@@ -29,35 +29,31 @@ ViXer の基本情報:
 - 冗長にしない。要点を先に、理由は短く。`;
 
 /**
- * AI 社員 5 人 + まとめ役 1 人。
- * 分析は「1 人 1 ツール」。担当するツールの数字だけを見て、他のツールの数字は根拠に使わない。
- * こうしておくと、誰がどの数字を見て何を言ったのかが混ざらない。
+ * AI 社員 5 人。1 ツール 1 担当。
+ * 「現状・傾向・問題点・改善案」はアプリが数字から組み立てる（src/analysis/tool-review.ts）。
+ * 5 人分をまとめた「今月やるべきこと」もアプリが計算するので、まとめ役の社員は置かない。
  */
 const ANALYSTS: Array<[string, string]> = [
-  ["search", "検索担当"], // Search Console … サイトに来る「前」
-  ["site", "サイト担当"], // GA4 … 「何が」起きたか
-  ["behavior", "行動担当"], // ヒートマップ・録画 … 「なぜ」そうなったか
-  ["map", "地図担当"], // Google ビジネスプロフィール … 地図で見つけられたか
-  ["booking", "予約・入会担当"], // hacomono・受付 … 実際に予約・入会したか
+  ["search", "Search Console 担当"], // サイトに来る「前」
+  ["map", "Google ビジネスプロフィール担当"], // 地図で見つけられたか
+  ["site", "GA4 担当"], // 「何が」起きたか
+  ["behavior", "Clarity 担当"], // 「なぜ」そうなったか
+  ["booking", "hacomono 担当"], // 実際に予約・入会したか
 ];
 
-/**
- * まとめ役。5 人分の分析を 1 つにまとめ、改善を最大 3 つに絞り、
- * 採用されたら成果物を作り、あとで KPI を確かめるところまで受け持つ。
- * 人数を増やさないため、決める・作る・確かめるを 1 人に寄せている。
- */
-const COMMANDER_ID = "commander";
-
-export const EMPLOYEES: EmployeeDef[] = [
-  ...ANALYSTS.map(([id, name]) => ({ id, name, department: "analysis" as const, systemPrompt: ANALYSIS_PROMPTS[id] })),
-  { id: COMMANDER_ID, name: "経営まとめ担当", department: "command", systemPrompt: COMMANDER_PROMPTS.synthesize, outputKind: "plan" },
-];
+export const EMPLOYEES: EmployeeDef[] = ANALYSTS.map(([id, name]) => ({
+  id,
+  name,
+  department: "analysis" as const,
+  systemPrompt: ANALYSIS_PROMPTS[id],
+}));
 
 /**
- * 以前の 18 人体制で作られた記録を読むための名前表。
- * 過去の施策カードや履歴が「content」のような id のまま表示されないようにする。
+ * 以前の体制で作られた記録を読むための名前表。
+ * 過去の分析や施策が「content」のような id のまま表示されないようにする。
  */
 const LEGACY_NAMES: Record<string, string> = {
+  commander: "経営まとめ担当（旧）",
   data: "データ分析担当（旧）", marketing: "マーケ分析担当（旧）", customer: "顧客・継続分析担当（旧）",
   sales: "営業・入会分析担当（旧）", web: "Web・SEO 分析担当（旧）", product: "商品・料金分析担当（旧）",
   profit: "収益分析担当（旧）", competitor: "競合・市場分析担当（旧）",
@@ -67,9 +63,14 @@ const LEGACY_NAMES: Record<string, string> = {
 };
 
 export const EMPLOYEE_MAP: Record<string, EmployeeDef> = Object.fromEntries(EMPLOYEES.map((e) => [e.id, e]));
-export const ANALYST_IDS = ANALYSTS.map(([id]) => id);
-/** 施策の担当。まとめ役が 1 人で受け持つ */
-export const EXECUTOR_IDS = [COMMANDER_ID];
+export const ANALYST_IDS: string[] = ANALYSTS.map(([id]) => id);
+
+/**
+ * 施策の担当。MVP では施策管理を画面から外しているので使わない。
+ * 施策の流れ（採用 → 成果物 → KPI 検証）のコードは残してあり、
+ * 外部 AI を接続して再開するときにここへ担当を戻す。
+ */
+export const EXECUTOR_IDS: string[] = [];
 
 export function employeeName(id: string): string {
   return EMPLOYEE_MAP[id]?.name ?? LEGACY_NAMES[id] ?? id;

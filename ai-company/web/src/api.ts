@@ -91,21 +91,35 @@ export interface Hypothesis { hypothesis: string; rationale: string }
 export interface Analysis { id: string; employee_id: string; employee_name: string; status: string; conclusion: string | null; facts: string[]; hypotheses: Hypothesis[]; evidence: Evidence[]; missing_data: string[]; actions: string[]; unverified_numbers: string[]; findings_md: string | null; model: string | null }
 export interface Decision { id: string; version: number; top_issue: string; reasoning_md: string; evidence: Evidence[]; needed_data: string[]; not_now: Array<{ item: string; reason: string }>; created_at: string }
 export interface RosterEntry { id: string; name: string }
+
+/** 担当 1 人分の分析。アプリが数字から組み立てる */
+export interface Finding { problem: string; fix: string; weight: number }
+export interface ToolReview {
+  id: string; name: string; tool: string; question: string;
+  verdict: "good" | "watch" | "problem" | "no_data";
+  current: string[]; trend: string[]; findings: Finding[]; missing: string[];
+}
+export interface MonthlyAction { rank: number; action: string; why: string; from: string }
+export interface OverallReview {
+  reviews: ToolReview[];
+  weakest: string | null;
+  headline: string;
+  actions: MonthlyAction[];
+  noDataOwners: string[];
+}
 export interface Project {
   id: string; title: string; period_label: string | null; period_key: string | null; input_text: string; input_data: NormalizedInput | null; extra_text: string | null; analyst_mode: string;
   derived: { kpis: DerivedKpi[]; comparison: Comparison } | null; funnel: Funnel | null;
+  review: OverallReview | null;
   selected_analysts: string[] | null; selection_reason: string | null; status: string; error: string | null; created_at: string; updated_at: string;
 }
 export interface ProjectBundle { project: Project; analyses: Analysis[]; decision: Decision | null; tasks: TaskFull[]; roster: { analysts: RosterEntry[]; commander: RosterEntry; executors: RosterEntry[] } }
 export interface Dashboard {
   today: string;
-  counts: { analyzing: number; awaiting_approval: number; in_progress: number; awaiting_verification: number };
-  running_project: { id: string; title: string; status: string } | null;
   latest_project: { id: string; title: string; status: string; created_at: string } | null;
-  priorities: Task[];
-  active_tasks: ActiveTask[];
+  recent_projects: Array<{ id: string; title: string; period_label: string | null; status: string; created_at: string }>;
   employees: Employee[];
-  totals: { projects: number; knowledge: number };
+  totals: { projects: number };
 }
 export interface KnowledgeData {
   issue?: string; period?: string | null; numbers_at_the_time?: Record<string, number | string> | null; hypotheses?: string[];

@@ -15,7 +15,8 @@
     "ai:check": "tsx scripts/ai-check.ts",
     "leverage:check": "tsx scripts/leverage-check.ts",
     "frames:check": "tsx scripts/frames-check.ts",
-    "preflight": "tsx scripts/preflight.ts"
+    "preflight": "tsx scripts/preflight.ts",
+    "review:check": "tsx scripts/review-check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",

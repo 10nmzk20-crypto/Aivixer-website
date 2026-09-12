@@ -6,7 +6,7 @@ export interface ProjectRow {
   id: string; title: string; period_label: string | null; input_text: string; input_data_json: string | null; extra_text: string | null;
   analyst_mode: string; selected_analysts_json: string | null; selection_reason: string | null; status: string;
   workflow_instance_id: string | null; error: string | null;
-  period_key: string | null; derived_json: string | null; funnel_json: string | null;
+  period_key: string | null; derived_json: string | null; funnel_json: string | null; review_json: string | null;
   created_at: string; updated_at: string;
 }
 export interface AnalysisRow {
@@ -86,7 +86,7 @@ export interface LeverageFields {
   frame_warning: string | null;
 }
 
-export const PROJECT_STATUSES = ["analyzing", "ready_for_report", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
+export const PROJECT_STATUSES = ["analyzing", "reviewed", "ready_for_report", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed", "rejected", "failed"] as const;
 export const TASK_STATUSES = [
   "candidate", // 司令塔が作った施策案（承認待ちの手前）
   "awaiting_approval", // 代表の承認待ち（施策案の段階。成果物はまだ無い）
@@ -118,12 +118,12 @@ export class Repo {
   }
 
   // ---------- 案件 ----------
-  async createProject(input: { title: string; period_label: string | null; period_key: string | null; input_text: string; input_data: unknown; extra_text: string | null; analyst_mode: string; derived: unknown; funnel: unknown }): Promise<ProjectRow> {
+  async createProject(input: { title: string; period_label: string | null; period_key: string | null; input_text: string; input_data: unknown; extra_text: string | null; analyst_mode: string; derived: unknown; funnel: unknown; review: unknown; status: string }): Promise<ProjectRow> {
     const id = newId();
     const t = now();
     await this.db
-      .prepare("INSERT INTO projects (id, title, period_label, period_key, input_text, input_data_json, extra_text, analyst_mode, derived_json, funnel_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'analyzing', ?, ?)")
-      .bind(id, input.title, input.period_label, input.period_key, input.input_text, input.input_data == null ? null : json(input.input_data), input.extra_text, input.analyst_mode, json(input.derived), json(input.funnel), t, t)
+      .prepare("INSERT INTO projects (id, title, period_label, period_key, input_text, input_data_json, extra_text, analyst_mode, derived_json, funnel_json, review_json, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, input.title, input.period_label, input.period_key, input.input_text, input.input_data == null ? null : json(input.input_data), input.extra_text, input.analyst_mode, json(input.derived), json(input.funnel), json(input.review), input.status, t, t)
       .run();
     return (await this.getProject(id))!;
   }
