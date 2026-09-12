@@ -129,7 +129,7 @@ export interface KnowledgeData {
 }
 export interface Report { id: string; project_id: string; version: number; period_label: string | null; content: string; char_count: number; created_at: string }
 export interface Knowledge { id: string; kind: string; title: string; body_md: string; tags: string[]; source_type: string | null; source_id: string | null; outcome: string | null; data: KnowledgeData | null; created_at: string }
-export interface Metric { id: string; label: string; unit: string; source: string; hint?: string }
+export interface Metric { id: string; label: string; unit: string; source: string; hint?: string; optional?: boolean }
 export interface MetricGroup { id: string; label: string; description: string; source: string; open: boolean; metrics: Metric[]; owner?: string | null; owner_name?: string }
 export interface NoteField { id: string; label: string; placeholder: string; group: string }
 export interface KeywordRow { keyword: string; impressions: number | null; clicks: number | null; ctr: number | null; position: number | null }

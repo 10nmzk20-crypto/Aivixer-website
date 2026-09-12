@@ -12,6 +12,8 @@
 export type MetricSource = "manual" | "gbp" | "gsc" | "ga4" | "clarity" | "internal";
 
 export interface MetricDef {
+  /** 分析の判定に使う項目か。false のものは「その他」に畳んで、入力の手数を減らす */
+  optional?: boolean;
   id: string;
   label: string;
   unit: string;
@@ -40,7 +42,7 @@ const BASIC: MetricDef[] = [
   { id: "new_members", label: "新規入会者数（合計）", unit: "名", source: "internal" },
   { id: "churn", label: "退会者数", unit: "名", source: "internal" },
   { id: "members", label: "月末会員数", unit: "名", source: "internal" },
-  { id: "sales", label: "売上", unit: "円", source: "internal" },
+  { id: "sales", optional: true, label: "売上", unit: "円", source: "internal" },
 ];
 
 /** ② Google ビジネスプロフィール */
@@ -53,7 +55,7 @@ const GBP: MetricDef[] = [
   { id: "gbp_directions", label: "ルート検索数", unit: "回", source: "gbp" },
   { id: "gbp_reviews_total", label: "口コミ件数（累計）", unit: "件", source: "gbp" },
   { id: "gbp_rating", label: "口コミ平均評価", unit: "点", source: "gbp" },
-  { id: "gbp_reviews_new", label: "当月の新規口コミ数", unit: "件", source: "gbp" },
+  { id: "gbp_reviews_new", optional: true, label: "当月の新規口コミ数", unit: "件", source: "gbp" },
 ];
 
 /** ③ Google Search Console */
@@ -67,17 +69,17 @@ const GSC: MetricDef[] = [
 /** ④ Google Analytics 4 */
 const GA4: MetricDef[] = [
   { id: "ga4_users", label: "ユーザー数", unit: "人", source: "ga4" },
-  { id: "ga4_sessions", label: "セッション数", unit: "回", source: "ga4" },
-  { id: "ga4_new_users", label: "新規ユーザー数", unit: "人", source: "ga4" },
-  { id: "ga4_organic_users", label: "Google 自然検索からのユーザー数", unit: "人", source: "ga4" },
-  { id: "ga4_maps_users", label: "Google マップ等からの流入数", unit: "人", source: "ga4", hint: "分かる場合のみ" },
+  { id: "ga4_sessions", optional: true, label: "セッション数", unit: "回", source: "ga4" },
+  { id: "ga4_new_users", optional: true, label: "新規ユーザー数", unit: "人", source: "ga4" },
+  { id: "ga4_organic_users", optional: true, label: "Google 自然検索からのユーザー数", unit: "人", source: "ga4" },
+  { id: "ga4_maps_users", optional: true, label: "Google マップ等からの流入数", unit: "人", source: "ga4", hint: "分かる場合のみ" },
   { id: "ga4_pv_top", label: "トップページ閲覧数", unit: "回", source: "ga4" },
   { id: "ga4_pv_price", label: "料金ページ閲覧数", unit: "回", source: "ga4" },
   { id: "ga4_pv_trial", label: "見学・体験ページ閲覧数", unit: "回", source: "ga4" },
   { id: "ga4_cta_trial", label: "見学・体験 CTA クリック数", unit: "回", source: "ga4" },
-  { id: "ga4_cta_line", label: "LINE クリック数", unit: "回", source: "ga4" },
-  { id: "ga4_cta_tel", label: "電話クリック数", unit: "回", source: "ga4" },
-  { id: "ga4_booking_page", label: "Web 予約ページへの遷移数", unit: "回", source: "ga4" },
+  { id: "ga4_cta_line", optional: true, label: "LINE クリック数", unit: "回", source: "ga4" },
+  { id: "ga4_cta_tel", optional: true, label: "電話クリック数", unit: "回", source: "ga4" },
+  { id: "ga4_booking_page", optional: true, label: "Web 予約ページへの遷移数", unit: "回", source: "ga4" },
 ];
 
 /** ⑤ ヒートマップ・行動分析（Microsoft Clarity など） */
@@ -120,7 +122,6 @@ export const METRIC_GROUPS: MetricGroupDef[] = [
   { id: "clarity", label: "④ ヒートマップ・行動分析", description: "行動担当が見ます。どこまで読まれ、どこで迷い、つまずいたか。", source: "clarity", open: false, metrics: CLARITY },
   { id: "basic", label: "⑤ 予約・入会・会員", description: "予約・入会担当が見ます。実際に何人来て、何人が入会したか。ここだけでも分析できます。", source: "internal", open: true, metrics: BASIC },
   { id: "booking", label: "⑤-2 見学・体験予約の経路", description: "予約・入会担当が見ます。予約が入った経路と件数。実来館数と比べて来館率を出します。", source: "internal", open: false, metrics: BOOKING },
-  { id: "awareness", label: "⑤-3 認知経路（何で知りましたか）", description: "予約・入会担当が見ます。見学・体験に来た人に聞いた集計。合計が見学人数と一致しなくても構いません。", source: "internal", open: false, metrics: AWARENESS },
 ];
 
 /** 全項目を平らにした一覧（id で引くため） */

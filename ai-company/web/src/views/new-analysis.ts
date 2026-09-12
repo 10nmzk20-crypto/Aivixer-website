@@ -21,7 +21,14 @@ export async function renderNewAnalysis(main: HTMLElement) {
     return `<details class="block" data-group="${esc(g.id)}"${g.open ? " open" : ""}>
       <summary><span class="nm">${esc(g.label)}${g.owner_name ? `<span class="owner">${esc(g.owner_name)}</span>` : ""}</span><span class="desc">${esc(g.description)}</span>${filled}</summary>
       <div class="block-body">
-        <div class="grid3">${g.metrics.map(field).join("")}</div>
+        <div class="grid3">${g.metrics.filter((m) => !m.optional).map(field).join("")}</div>
+        ${
+          // 判定に使わない項目は畳んでおく。毎月の入力を短くするため
+          g.metrics.some((m) => m.optional)
+            ? `<details class="more"><summary>その他の数字も入れる<span>${g.metrics.filter((m) => m.optional).length} 項目 · 任意</span></summary>
+                 <div class="grid3">${g.metrics.filter((m) => m.optional).map(field).join("")}</div></details>`
+            : ""
+        }
         ${g.id === "gsc" ? keywordsBlock() : ""}
         ${noteFields.map((n) => `<label class="f note"><span>${esc(n.label)}</span><textarea data-note="${esc(n.id)}" placeholder="${esc(n.placeholder)}"></textarea></label>`).join("")}
       </div>
