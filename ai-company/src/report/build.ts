@@ -1,5 +1,6 @@
 import type { ProjectRow, KnowledgeRow, TaskRow, KpiRow } from "../db/repo";
-import { METRIC_GROUPS, SOURCE_LABEL, normalizeInputData, type NormalizedInput } from "../metrics";
+import { employeeName } from "../employees/roster";
+import { GROUP_OWNER, METRIC_GROUPS, OWNER_QUESTION, normalizeInputData, type NormalizedInput } from "../metrics";
 import { bookingShares, channelShares, computeDerived, totalBookings, totalJoins, type DerivedKpi } from "../analysis/derived";
 import type { ComparisonResult } from "../analysis/compare";
 import { FUNNEL_STATUS_JA, type FunnelResult } from "../analysis/funnel";
@@ -72,7 +73,7 @@ export function buildReport(src: ReportSources): string {
   L.push("");
 
   // ---------- 基本の数字 ----------
-  L.push("## 1. 基本の数字", "");
+  L.push(`## 1. 基本の数字（担当: ${employeeName("booking")} / 答える問い: ${OWNER_QUESTION.booking.question}）`, "");
   metric("sales", "売上", " 円");
   metric("members", "月末会員数", " 名");
   metric("new_members", "新規入会", " 名");
@@ -136,15 +137,18 @@ export function buildReport(src: ReportSources): string {
   L.push("");
 
   // ---------- 集客の数字（ブロックごと） ----------
+  // 集客の流れ順（見つけてもらう → 見てもらう → 迷いを見る）。担当が 1 人ずつ決まっている
   const blocks: Array<[string, string]> = [
-    ["gbp", "5. Google ビジネスプロフィール"],
-    ["gsc", "6. Google Search Console"],
-    ["ga4", "7. Google Analytics 4"],
-    ["clarity", "8. ヒートマップ・行動分析"],
+    ["gsc", "5"],
+    ["gbp", "6"],
+    ["ga4", "7"],
+    ["clarity", "8"],
   ];
-  for (const [groupId, heading] of blocks) {
+  for (const [groupId, no] of blocks) {
     const group = METRIC_GROUPS.find((g) => g.id === groupId)!;
-    L.push(`## ${heading}（出どころ: ${SOURCE_LABEL[group.source]}）`, "");
+    const owner = GROUP_OWNER[groupId];
+    const q = OWNER_QUESTION[owner];
+    L.push(`## ${no}. ${q.tool}（担当: ${employeeName(owner)} / 答える問い: ${q.question}）`, "");
     const rows = group.metrics.filter((m) => v[m.id] !== undefined);
     if (rows.length === 0) L.push(NA);
     for (const m of rows) L.push(`${m.label}: ${num(v[m.id])} ${m.unit}${comparisonSuffix(cmp, m.id)}`);
@@ -175,7 +179,7 @@ export function buildReport(src: ReportSources): string {
   }
 
   // ---------- 認知経路と流入チャネル ----------
-  L.push("## 9. 認知経路（見学・体験者に聞いた「何で知りましたか」）", "");
+  L.push(`## 9. 認知経路（担当: ${employeeName("booking")} / 見学・体験者に聞いた「何で知りましたか」）`, "");
   const aw = channelShares(v);
   if (aw.rows.length === 0) L.push(NA);
   else {
@@ -183,7 +187,7 @@ export function buildReport(src: ReportSources): string {
     L.push(`合計: ${num(aw.total, " 名")}`);
   }
   L.push("");
-  L.push("## 10. 見学・体験予約の経路別", "");
+  L.push(`## 10. 見学・体験予約の経路別（担当: ${employeeName("booking")}）`, "");
   const bk = bookingShares(v);
   if (bk.rows.length === 0) L.push(NA);
   else {

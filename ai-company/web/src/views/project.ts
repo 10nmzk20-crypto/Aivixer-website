@@ -2,7 +2,7 @@ import { api, type Analysis, type Comparison, type DerivedKpi, type Evidence, ty
 import { esc, fmtDate, fmtNum, ACHIEVEMENT_JA, FUNNEL_STATUS_JA, HUMAN_WORK_JA, PROJECT_STATUS_JA, RESTRICTED_JA, TASK_STATUS_JA, TASK_TYPE_JA, VERDICT_JA, statusChip, toast, errorBox } from "../components";
 import { renderMarkdown } from "../markdown";
 
-/** ③ 案件詳細: 進捗 → 入力 → 分析部 → 経営司令塔 → 最優先施策（成果物・承認・KPI） */
+/** ③ 案件詳細: 進捗 → 入力 → 分析 5 人 → 経営まとめ担当 → 最優先施策（成果物・承認・KPI） */
 const STEPS = ["analyzing", "candidates", "awaiting_approval", "in_progress", "awaiting_verification", "completed"];
 let metricLabels: Record<string, string> | null = null;
 let analysts: Array<{ id: string; name: string }> | null = null;
@@ -71,7 +71,7 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
           <div><h4>追加で必要なデータ</h4><ul>${d.needed_data.map((x) => `<li>${esc(x)}</li>`).join("") || "<li>なし</li>"}</ul></div>
         </div>
         <p class="tasks-note">今やること（最大 3 つ）は下の「最優先施策」です。</p></div>`
-    : `<div class="cmd"><div class="placeholder" style="padding:6px 0">${p.status === "analyzing" ? "分析部の結果が揃うと、ここに「結局、今何をやるべきか」が表示されます。" : "司令塔の判断はありません。"}</div></div>`;
+    : `<div class="cmd"><div class="placeholder" style="padding:6px 0">${p.status === "analyzing" ? "5 人の結果が揃うと、ここに「結局、今何をやるべきか」が表示されます。" : "経営まとめ担当の判断はありません。"}</div></div>`;
 
   const tasks = b.tasks.length
     ? `<div class="tasks n${Math.min(3, b.tasks.length)}">${b.tasks.map((t) => taskCard(t, openVersions)).join("")}</div>`
@@ -99,11 +99,11 @@ function draw(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
       </div>
     </div>
     <div class="sec"${b.roster.analysts.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>今回招集された AI 社員 <span>${selected ? `分析 ${b.roster.analysts.length} 名 + 司令塔${b.roster.executors.length ? ` + 実行 ${b.roster.executors.length} 名` : ""}` : "司令塔が招集中"}</span></h2><div class="hint">相談内容に必要な担当だけを招集し、他の社員は動かしません</div></div>
-      <div class="roster">${rosterChips(b.roster.analysts, "分析部", "analysis")}${rosterChips([b.roster.commander], "司令塔", "command")}${rosterChips(b.roster.executors, "実行部", "execution")}</div></div>
-    <div class="sec"${b.analyses.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>分析部の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
-    <div class="sec"${b.decision ? "" : ' hidden'}><div class="sec-head"><h2>経営司令塔の判断</h2><div class="hint">判断基準: インパクト ÷ 必要時間</div></div>${commander}</div>
-    <div class="sec"${b.tasks.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>最優先施策 <span>最大 3 つ · 実行部の成果物</span></h2><div class="hint">採用すると KPI を確定し「実行中」へ</div></div>${tasks}</div>
-    <div class="foot-note">実行部の成果物は文章・原稿・仕様書のみです。HP 公開、広告出稿、SNS 投稿、LINE 送信、料金変更、会員データ変更は AI からは行えず、代表の承認と操作が必要です。</div>
+      <div class="roster">${rosterChips(b.roster.analysts, "分析（1 人 1 ツール）", "analysis")}${rosterChips([b.roster.commander], "まとめ", "command")}</div></div>
+    <div class="sec"${b.analyses.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>各担当の結果 <span>${selected ? `担当 ${selected.length} 名` : "担当を選定中"}</span></h2></div><div class="acc">${analysisRows}</div></div>
+    <div class="sec"${b.decision ? "" : ' hidden'}><div class="sec-head"><h2>経営まとめ担当の判断</h2><div class="hint">判断基準: インパクト ÷ 必要時間</div></div>${commander}</div>
+    <div class="sec"${b.tasks.length === 0 ? ' hidden' : ""}><div class="sec-head"><h2>最優先施策 <span>最大 3 つ</span></h2><div class="hint">採用すると KPI を確定し「実行中」へ</div></div>${tasks}</div>
+    <div class="foot-note">成果物は文章・原稿・仕様書のみです。HP 公開、広告出稿、SNS 投稿、LINE 送信、料金変更、会員データ変更は AI からは行えず、代表の承認と操作が必要です。</div>
   </section>`;
 
   bind(main, b, openVersions, refresh);
@@ -278,7 +278,7 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   const note = (text: string) => `<div class="out"><div class="placeholder" style="padding:6px 0">${text}</div></div>`;
   let body: string;
   if (t.status === "candidate" || t.status === "awaiting_approval") body = note(`採用すると、${esc(t.executor_name)}がこの施策の成果物（原稿・計画・仕様書）を作ります。`);
-  else if (t.status === "plan_revising") body = note("経営司令塔が施策案を作り直しています…");
+  else if (t.status === "plan_revising") body = note("経営まとめ担当が施策案を作り直しています…");
   else if (t.status === "producing") body = note(`${esc(t.executor_name)}が成果物を作成しています…`);
   else if (!out) body = note(t.production_error ? `成果物の作成に失敗しました: ${esc(t.production_error)}` : "成果物はまだありません。");
   else
@@ -298,11 +298,11 @@ function taskCard(t: TaskFull, openVersions: Record<string, number>): string {
   switch (t.status) {
     case "awaiting_approval":
       act = `<div class="act"><button type="button" class="btn primary" data-dec="adopted" data-task="${t.id}">採用</button><button type="button" class="btn" data-dec="revise" data-task="${t.id}">修正</button><button type="button" class="btn danger" data-dec="rejected" data-task="${t.id}">却下</button></div>
-        <div class="panel" id="rev-${t.id}"><label class="f">施策案の修正指示（経営司令塔が案を作り直します）<textarea data-revnote="${t.id}" placeholder="例: 期間を 2 週間に短縮したい。LINE ではなく来館時の声かけで。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rev-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-revsend="${t.id}">修正を依頼</button></div></div>
+        <div class="panel" id="rev-${t.id}"><label class="f">施策案の修正指示（経営まとめ担当が案を作り直します）<textarea data-revnote="${t.id}" placeholder="例: 期間を 2 週間に短縮したい。LINE ではなく来館時の声かけで。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rev-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-revsend="${t.id}">修正を依頼</button></div></div>
         <div class="panel" id="rej-${t.id}"><label class="f">却下の理由（ナレッジに残ります）<textarea data-rejnote="${t.id}" placeholder="例: 今は人手が足りない。来月再検討。"></textarea></label><div class="r"><button type="button" class="btn sm" data-panel-close="rej-${t.id}">キャンセル</button><button type="button" class="btn sm primary" data-rejsend="${t.id}">却下する</button></div></div>`;
       break;
     case "plan_revising":
-      act = `<div class="note-box"><span class="badge">施策案を修正中</span><span>経営司令塔が修正指示を反映した案を作っています…</span></div>`;
+      act = `<div class="note-box"><span class="badge">施策案を修正中</span><span>経営まとめ担当が修正指示を反映した案を作っています…</span></div>`;
       break;
     case "producing":
       act = `<div class="note-box"><span class="badge">採用</span><span>${esc(t.executor_name)}に引き継ぎました。成果物を作成しています…</span></div>`;
@@ -473,7 +473,7 @@ function bind(main: HTMLElement, b: ProjectBundle, openVersions: Record<string, 
   q<HTMLElement>("[data-revsend]").forEach((el) => el.addEventListener("click", () => {
     const note = val(`[data-revnote="${el.dataset.revsend}"]`).trim();
     if (!note) return toast("修正指示を入力してください。");
-    run(() => api.post(`/api/tasks/${el.dataset.revsend}/approval`, { decision: "revise", note }), "修正を依頼しました。経営司令塔が施策案を作り直します。");
+    run(() => api.post(`/api/tasks/${el.dataset.revsend}/approval`, { decision: "revise", note }), "修正を依頼しました。経営まとめ担当が施策案を作り直します。");
   }));
   q<HTMLElement>("[data-rejsend]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.rejsend}/approval`, { decision: "rejected", note: val(`[data-rejnote="${el.dataset.rejsend}"]`) }), "却下しました。ナレッジに保存しました。")));
   q<HTMLElement>("[data-implemented]").forEach((el) => el.addEventListener("click", () => run(() => api.post(`/api/tasks/${el.dataset.implemented}/status`, { status: "awaiting_verification" }), "「検証待ち」にしました。期日に KPI を入力してください。")));

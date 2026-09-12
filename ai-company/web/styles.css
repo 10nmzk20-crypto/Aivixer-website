@@ -412,3 +412,6 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 .frm-item[data-mark="×"] .frm-name, .frm-item[data-mark="×"] .frm-mark { color: #0A0A0A; }
 .frm-note { margin: 6px 0 0; font-size: 11px; color: var(--text-2); display: flex; gap: 8px; }
 .frm-note span { flex: none; font-size: 10px; letter-spacing: .06em; color: var(--faint); padding-top: 1px; }
+
+/* 入力ブロックの担当名。1 ブロック 1 担当なので、誰が見る数字かを見出しに出す */
+.block summary .nm .owner { margin-left: 9px; font-size: 10px; letter-spacing: .08em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 2px; padding: 2px 7px; white-space: nowrap; font-weight: 300; }

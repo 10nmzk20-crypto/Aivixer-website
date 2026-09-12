@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { Repo } from "../db/repo";
-import { EMPLOYEES } from "../employees/roster";
+import { employeeName } from "../employees/roster";
 
 /** ダッシュボード用: 今日の状況・最優先・社員の稼働状況を 1 回で返す */
 export function dashboardRoutes() {
@@ -33,7 +33,6 @@ export function dashboardRoutes() {
     if (runningProject && runningAnalyses.length === 0) busy.commander = "分析担当を選定中";
 
     const priorities = latest ? await repo.listTasks(latest.id) : [];
-    const names = Object.fromEntries(EMPLOYEES.map((e) => [e.id, e.name]));
 
     return c.json({
       today: new Date().toISOString().slice(0, 10),
@@ -47,14 +46,14 @@ export function dashboardRoutes() {
       latest_project: latest ? { id: latest.id, title: latest.title, status: latest.status, created_at: latest.created_at } : null,
       priorities: priorities.map((t) => ({
         ...t,
-        executor_name: names[t.executor_employee_id] ?? t.executor_employee_id,
+        executor_name: employeeName(t.executor_employee_id),
         restricted_actions: JSON.parse(t.restricted_actions_json),
         leverage: { type: t.task_type ?? null, score: t.leverage_score, human_work_change: t.human_work_change },
         frames: t.frames_json ? (JSON.parse(t.frames_json) as object) : null,
       })),
       active_tasks: activeTasks
         .filter((t) => t.status === "in_progress" || t.status === "awaiting_verification" || t.status === "verifying")
-        .map((t) => ({ id: t.id, project_id: t.project_id, project_title: t.project_title, title: t.title, status: t.status, executor_name: names[t.executor_employee_id] ?? t.executor_employee_id, due_date: t.due_date, human_owner: t.human_owner })),
+        .map((t) => ({ id: t.id, project_id: t.project_id, project_title: t.project_title, title: t.title, status: t.status, executor_name: employeeName(t.executor_employee_id), due_date: t.due_date, human_owner: t.human_owner })),
       employees: employees.map((e) => ({ ...e, watches: JSON.parse(e.watches_json), current: busy[e.id] ?? null })),
       totals: { projects: Object.values(projectCounts).reduce((a, b) => a + b, 0), knowledge: knowledgeCount },
     });

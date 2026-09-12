@@ -112,16 +112,41 @@ const AWARENESS: MetricDef[] = [
 ];
 
 export const METRIC_GROUPS: MetricGroupDef[] = [
-  { id: "basic", label: "基本（見学・入会・会員）", description: "実際の見学・体験から入会・退会まで。ここだけでも分析できます。", source: "internal", open: true, metrics: BASIC },
-  { id: "booking", label: "見学・体験予約", description: "予約が入った経路と件数。実来館数（基本）と比べて来館率を出します。", source: "internal", open: false, metrics: BOOKING },
-  { id: "gbp", label: "Google ビジネスプロフィール", description: "Google 検索・マップでの見え方と、そこからの行動。", source: "gbp", open: false, metrics: GBP },
-  { id: "gsc", label: "Google Search Console", description: "ホームページが Google 検索でどれくらい見つかっているか。", source: "gsc", open: false, metrics: GSC },
-  { id: "ga4", label: "Google Analytics 4", description: "ホームページに来た人が何をしたか。", source: "ga4", open: false, metrics: GA4 },
-  { id: "clarity", label: "ヒートマップ・行動分析", description: "ページのどこまで読まれ、どこが押されているか。", source: "clarity", open: false, metrics: CLARITY },
-  { id: "awareness", label: "認知経路（何で知りましたか）", description: "見学・体験に来た人に聞いた集計。合計が見学人数と一致しなくても構いません。", source: "internal", open: false, metrics: AWARENESS },
+  // 並びは集客の流れ順。見つけてもらう → 見てもらう → 迷いを見る → 決まったか。
+  // 各ブロックは担当が 1 人ずつ決まっている（GROUP_OWNER）。
+  { id: "gsc", label: "① Google Search Console", description: "検索担当が見ます。どんな言葉で検索され、何位に出て、どれだけ押されたか。", source: "gsc", open: true, metrics: GSC },
+  { id: "gbp", label: "② Google ビジネスプロフィール", description: "地図担当が見ます。地図と検索で見つけてもらえたか、そこから何をされたか。", source: "gbp", open: false, metrics: GBP },
+  { id: "ga4", label: "③ Google Analytics 4", description: "サイト担当が見ます。何人来て、どのページを見て、どのボタンが押されたか。", source: "ga4", open: false, metrics: GA4 },
+  { id: "clarity", label: "④ ヒートマップ・行動分析", description: "行動担当が見ます。どこまで読まれ、どこで迷い、つまずいたか。", source: "clarity", open: false, metrics: CLARITY },
+  { id: "basic", label: "⑤ 予約・入会・会員", description: "予約・入会担当が見ます。実際に何人来て、何人が入会したか。ここだけでも分析できます。", source: "internal", open: true, metrics: BASIC },
+  { id: "booking", label: "⑤-2 見学・体験予約の経路", description: "予約・入会担当が見ます。予約が入った経路と件数。実来館数と比べて来館率を出します。", source: "internal", open: false, metrics: BOOKING },
+  { id: "awareness", label: "⑤-3 認知経路（何で知りましたか）", description: "予約・入会担当が見ます。見学・体験に来た人に聞いた集計。合計が見学人数と一致しなくても構いません。", source: "internal", open: false, metrics: AWARENESS },
 ];
 
 /** 全項目を平らにした一覧（id で引くため） */
+/**
+ * どの入力ブロックを、どの AI 社員が担当するか。
+ * 1 人 1 ツール。数字が 1 つも入っていないツールの担当は呼ばない。
+ */
+export const GROUP_OWNER: Record<string, string> = {
+  gsc: "search", // Search Console … サイトに来る「前」
+  ga4: "site", // GA4 … 「何が」起きたか
+  clarity: "behavior", // ヒートマップ・録画 … 「なぜ」そうなったか
+  gbp: "map", // Google ビジネスプロフィール … 地図で見つけられたか
+  basic: "booking", // 予約・入会・会員 … 実際にどうなったか
+  booking: "booking",
+  awareness: "booking",
+};
+
+/** 担当ごとの「何を答える人か」。画面とレポートの見出しに使う */
+export const OWNER_QUESTION: Record<string, { tool: string; question: string }> = {
+  search: { tool: "Google Search Console", question: "どんな言葉で検索され、何位だったか" },
+  site: { tool: "Google Analytics 4", question: "何人来て、どこを見て、何を押したか" },
+  behavior: { tool: "ヒートマップ・録画", question: "なぜそこで止まったか" },
+  map: { tool: "Google ビジネスプロフィール", question: "地図で見つけてもらえたか" },
+  booking: { tool: "予約システム・受付", question: "実際に予約・入会したか" },
+};
+
 export const ALL_METRICS: MetricDef[] = METRIC_GROUPS.flatMap((g) => g.metrics);
 export const METRIC_MAP: Record<string, MetricDef> = Object.fromEntries(ALL_METRICS.map((m) => [m.id, m]));
 export const METRIC_GROUP_OF: Record<string, string> = Object.fromEntries(METRIC_GROUPS.flatMap((g) => g.metrics.map((m) => [m.id, g.id])));
@@ -206,6 +231,32 @@ export function normalizeInputData(raw: unknown): NormalizedInput {
 }
 
 /** 項目 id の表示名（単位つき）。以前だけの項目にも対応する */
+/**
+ * 入力された数字とメモから、呼ぶべき担当を決める。AI には選ばせない。
+ * 数字が 1 つも入っていないツールの担当は、言えることが無いので呼ばない。
+ */
+export function ownersWithData(input: NormalizedInput): string[] {
+  const owners = new Set<string>();
+  for (const [id, value] of Object.entries(input.values)) {
+    if (value === undefined) continue;
+    const group = METRIC_GROUP_OF[id];
+    const owner = group ? GROUP_OWNER[group] : undefined;
+    if (owner) owners.add(owner);
+  }
+  // 検索キーワードの表は Search Console のもの
+  if (input.keywords.length > 0) owners.add("search");
+  // ヒートマップのメモだけでも、行動担当は見るものがある
+  for (const [id, text] of Object.entries(input.notes)) {
+    if (!text || !text.trim()) continue;
+    const field = NOTE_FIELDS.find((f) => f.id === id);
+    const owner = field ? GROUP_OWNER[field.group] : undefined;
+    if (owner) owners.add(owner);
+  }
+  // 並びはファネルの順（見つかる → 見る → 迷う → 決める）に揃える
+  const order = ["search", "map", "site", "behavior", "booking"];
+  return order.filter((o) => owners.has(o));
+}
+
 export function metricLabel(id: string): string {
   const m = METRIC_MAP[id];
   if (m) return `${m.label}（${m.unit}）`;

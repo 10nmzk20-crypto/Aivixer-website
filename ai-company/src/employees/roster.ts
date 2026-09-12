@@ -28,45 +28,49 @@ ViXer の基本情報:
 - 存在しない数字を作らない。入力にない数値が必要なら「追加で必要なデータ」として挙げる。
 - 冗長にしない。要点を先に、理由は短く。`;
 
+/**
+ * AI 社員 5 人 + まとめ役 1 人。
+ * 分析は「1 人 1 ツール」。担当するツールの数字だけを見て、他のツールの数字は根拠に使わない。
+ * こうしておくと、誰がどの数字を見て何を言ったのかが混ざらない。
+ */
 const ANALYSTS: Array<[string, string]> = [
-  ["data", "データ分析担当"],
-  ["marketing", "マーケ分析担当"],
-  ["customer", "顧客・継続分析担当"],
-  ["sales", "営業・入会分析担当"],
-  ["web", "Web・SEO 分析担当"],
-  ["product", "商品・料金分析担当"],
-  ["profit", "収益分析担当"],
-  ["competitor", "競合・市場分析担当"],
+  ["search", "検索担当"], // Search Console … サイトに来る「前」
+  ["site", "サイト担当"], // GA4 … 「何が」起きたか
+  ["behavior", "行動担当"], // ヒートマップ・録画 … 「なぜ」そうなったか
+  ["map", "地図担当"], // Google ビジネスプロフィール … 地図で見つけられたか
+  ["booking", "予約・入会担当"], // hacomono・受付 … 実際に予約・入会したか
 ];
 
-const EXECUTORS: Array<[string, string, string]> = [
-  ["planner", "仕組み設計担当", "plan"],
-  ["content", "資産コンテンツ担当", "content"],
-  ["webdev", "Web 実装担当", "web_spec"],
-  ["growth", "資産型集客担当", "growth_plan"],
-  ["line", "摩擦削減担当", "line_script"],
-  ["retention", "セルフ利用設計担当", "retention_plan"],
-];
-
-/** 検証部。施策の結果を確かめ、直し、残す */
-const VERIFIERS: Array<[string, string, string]> = [
-  ["kpi", "KPI 検証担当", "kpi_review"],
-  ["improve", "自動化・改善担当", "improve_plan"],
-  ["knowledge", "ナレッジ担当", "knowledge_note"],
-];
+/**
+ * まとめ役。5 人分の分析を 1 つにまとめ、改善を最大 3 つに絞り、
+ * 採用されたら成果物を作り、あとで KPI を確かめるところまで受け持つ。
+ * 人数を増やさないため、決める・作る・確かめるを 1 人に寄せている。
+ */
+const COMMANDER_ID = "commander";
 
 export const EMPLOYEES: EmployeeDef[] = [
   ...ANALYSTS.map(([id, name]) => ({ id, name, department: "analysis" as const, systemPrompt: ANALYSIS_PROMPTS[id] })),
-  { id: "commander", name: "経営統合・振り分け担当", department: "command", systemPrompt: COMMANDER_PROMPTS.synthesize },
-  ...EXECUTORS.map(([id, name, outputKind]) => ({ id, name, department: "execution" as const, systemPrompt: EXECUTION_PROMPTS[id], outputKind })),
-  ...VERIFIERS.map(([id, name, outputKind]) => ({ id, name, department: "verification" as const, systemPrompt: EXECUTION_PROMPTS[id], outputKind })),
+  { id: COMMANDER_ID, name: "経営まとめ担当", department: "command", systemPrompt: COMMANDER_PROMPTS.synthesize, outputKind: "plan" },
 ];
+
+/**
+ * 以前の 18 人体制で作られた記録を読むための名前表。
+ * 過去の施策カードや履歴が「content」のような id のまま表示されないようにする。
+ */
+const LEGACY_NAMES: Record<string, string> = {
+  data: "データ分析担当（旧）", marketing: "マーケ分析担当（旧）", customer: "顧客・継続分析担当（旧）",
+  sales: "営業・入会分析担当（旧）", web: "Web・SEO 分析担当（旧）", product: "商品・料金分析担当（旧）",
+  profit: "収益分析担当（旧）", competitor: "競合・市場分析担当（旧）",
+  planner: "仕組み設計担当（旧）", content: "資産コンテンツ担当（旧）", webdev: "Web 実装担当（旧）",
+  growth: "資産型集客担当（旧）", line: "摩擦削減担当（旧）", retention: "セルフ利用設計担当（旧）",
+  kpi: "KPI 検証担当（旧）", improve: "自動化・改善担当（旧）", knowledge: "ナレッジ担当（旧）",
+};
 
 export const EMPLOYEE_MAP: Record<string, EmployeeDef> = Object.fromEntries(EMPLOYEES.map((e) => [e.id, e]));
 export const ANALYST_IDS = ANALYSTS.map(([id]) => id);
-/** 司令塔が施策の担当として選べる実行 AI（検証部は施策の担当にはならない） */
-export const EXECUTOR_IDS = EXECUTORS.map(([id]) => id);
+/** 施策の担当。まとめ役が 1 人で受け持つ */
+export const EXECUTOR_IDS = [COMMANDER_ID];
 
 export function employeeName(id: string): string {
-  return EMPLOYEE_MAP[id]?.name ?? id;
+  return EMPLOYEE_MAP[id]?.name ?? LEGACY_NAMES[id] ?? id;
 }

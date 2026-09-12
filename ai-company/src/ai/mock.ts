@@ -26,7 +26,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const usage = (): GenerateUsage => ({ model: "mock", inputTokens: 1200, outputTokens: 600 });
 
 function pick(system: string, user: string): unknown {
-  if (/分析部 8 人のうち今回必要な担当/.test(system)) return select(user);
   if (/修正指示を反映した新しい施策案を 1 件だけ/.test(user)) return revisedTask(user);
   if (/ViXer で最も重要な AI 社員/.test(system)) return SYNTHESIS;
   if (/KPI 検証担当/.test(system)) return VERIFICATION;
@@ -38,36 +37,11 @@ function pick(system: string, user: string): unknown {
  * 招集する担当を決める。本番では司令塔 AI が判断するが、
  * mock でも動きを再現するため、ファネル判定（問題ありの段階）と相談文から機械的に決める。
  */
-function select(user: string) {
-  const t = user.split("今回の入力:")[1] ?? user;
-  // ファネル判定に「最も詰まっている段階」があればそれを優先する
-  const weakest = /→ 最も詰まっている可能性が高い段階: (.+)/.exec(t)?.[1]?.trim();
-  const byStage: Record<string, { category: string; analysts: string[] }> = {
-    "Google 検索": { category: "集客（検索）", analysts: ["marketing", "web", "competitor"] },
-    "Google ビジネスプロフィール": { category: "集客（MEO）", analysts: ["marketing", "web", "competitor"] },
-    "HP 流入": { category: "集客（HP 流入）", analysts: ["web", "marketing", "data"] },
-    "HP 内行動": { category: "HP 内の導線", analysts: ["web", "marketing", "data"] },
-    "見学予約": { category: "見学予約", analysts: ["sales", "marketing", "customer"] },
-    実来館: { category: "実来館", analysts: ["sales", "customer", "data"] },
-    "30日お試し": { category: "入会導線", analysts: ["sales", "customer", "product"] },
-    本入会: { category: "入会導線", analysts: ["sales", "customer", "product"] },
-  };
-  if (weakest && byStage[weakest]) {
-    const hit = byStage[weakest];
-    return { ...hit, reason: `ファネル判定で「${weakest}」が最も詰まっているため、その段階を見る 3 名を招集しました。（固定回答）` };
-  }
-  if (/利益|固定費|人件費|コスト|経費/.test(t)) return { category: "収益", analysts: ["data", "profit", "product"], reason: "売上と利益の差に関する相談のため、全体数値・収益・商品構成の 3 名を招集しました。（固定回答）" };
-  if (/退会|休眠|来館/.test(t) && !/見学|お試し/.test(t)) return { category: "継続", analysts: ["customer", "data", "product"], reason: "退会・継続に関する相談のため、継続・全体数値・商品構成の 3 名を招集しました。（固定回答）" };
-  if (/Google|検索|流入|MEO|SEO|口コミ/i.test(t)) return { category: "集客", analysts: ["marketing", "web", "competitor"], reason: "検索・Google からの流入に関する相談のため、集客・Web・競合の 3 名を招集しました。（固定回答）" };
-  return { category: "入会導線", analysts: ["data", "sales", "customer"], reason: "見学から 30 日お試しへの転換に関する相談のため、全体数値・入会導線・継続の 3 名を招集しました。（固定回答）" };
-}
-
 /** 代表の修正指示を受けた施策案の作り直し（固定回答） */
 function revisedTask(user: string) {
   const rank = Number(/優先順位 (\d+)/.exec(user)?.[1] ?? 1);
   const title = /題名: (.+)/.exec(user)?.[1]?.trim() ?? "施策";
-  const executor = /担当 AI: (.+)/.exec(user)?.[1]?.trim() ?? "";
-  const executorId = { 摩擦削減担当: "line", 資産型集客担当: "growth", セルフ利用設計担当: "retention", 仕組み設計担当: "planner", 資産コンテンツ担当: "content", "Web 実装担当": "webdev" }[executor] ?? "planner";
+  const executorId = "commander"; // 施策の担当はまとめ役 1 人
   const note = /【代表からの修正指示】\n(.+)/.exec(user)?.[1]?.trim() ?? "";
   const base = SYNTHESIS.tasks.find((t) => t.rank === rank) ?? SYNTHESIS.tasks[0];
   return {
@@ -103,8 +77,8 @@ const SYNTHESIS = {
       title: "見学時に渡す「30 日お試しの進め方」1 枚と、同じ内容の Web ページを作る",
       objective: "見学の場で疑問と不安が解消され、その場で判断できる状態にする",
       what_to_do: "見学者から実際に出た質問を 10 個集め、答えを 1 枚にまとめる。料金・辞め方・持ち物・初日の流れ・混む時間帯を必ず入れる。同じ内容を HP の 1 ページにも置き、見学予約の確認メールからリンクする。紙は印刷して見学時に渡す。作ったあとは、質問が変わったときだけ直す。",
-      executor_employee_id: "content",
-      assignment_reason: "一度作れば働き続ける文章が成果物のため",
+      executor_employee_id: "commander",
+      assignment_reason: "そのまま配れる 1 枚と Web ページが成果物のため",
       human_owner: "代表（内容確認のみ）",
       duration_days: 14,
       task_type: "A",
@@ -140,8 +114,8 @@ const SYNTHESIS = {
       title: "よくある質問ページを作り、Google ビジネスプロフィールの固定情報も埋める",
       objective: "見学前の不安を減らし、検索から自然に見つかる状態を作る",
       what_to_do: "問い合わせで実際に多い質問を 15 個選び、答えを書いて HP に FAQ ページとして置く。Google ビジネスプロフィールの「質問と回答」「営業時間」「写真」も同じ内容で埋める。一度公開すれば、検索でも見学前でも使われ続ける。",
-      executor_employee_id: "growth",
-      assignment_reason: "積み上がる集客導線が成果物のため",
+      executor_employee_id: "commander",
+      assignment_reason: "検索から入れる FAQ ページが成果物のため",
       human_owner: "代表",
       duration_days: 21,
       task_type: "A",
@@ -177,8 +151,8 @@ const SYNTHESIS = {
       title: "目的別セルフメニュー（20分 / 30分 / 45分）を作って館内と Web に置く",
       objective: "「何をすればいいか分からない」で来館が減る人を、自分で決められる状態にする",
       what_to_do: "目的（体を絞る・体力をつける・肩腰を楽にする）ごとに、20分 / 30分 / 45分の 3 通りのメニューを作る。マシンの並び順に沿って書き、館内に掲示し、同じ内容を Web にも置く。スタッフに聞かなくても、来たその日に始められる状態にする。",
-      executor_employee_id: "retention",
-      assignment_reason: "会員が自分で使える仕組みの設計が成果物のため",
+      executor_employee_id: "commander",
+      assignment_reason: "会員が自分で選べるメニュー表が成果物のため",
       human_owner: "トレーナー（内容の確認）",
       duration_days: 30,
       task_type: "A",

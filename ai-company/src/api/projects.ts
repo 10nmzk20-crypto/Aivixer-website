@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import type { Env } from "../env";
 import { Repo, type ProjectRow } from "../db/repo";
-import { EMPLOYEES } from "../employees/roster";
-import { METRIC_GROUPS, NOTE_FIELDS, normalizeInputData } from "../metrics";
+import { EMPLOYEES, employeeName } from "../employees/roster";
+import { GROUP_OWNER, METRIC_GROUPS, NOTE_FIELDS, normalizeInputData } from "../metrics";
 import { computeDerived, withKeywordCtr } from "../analysis/derived";
 import { compare, toPeriodKey, type HistoryEntry } from "../analysis/compare";
 import { diagnoseFunnel } from "../analysis/funnel";
@@ -25,7 +25,13 @@ export function projectRoutes() {
   });
 
   /** 入力画面の項目定義（ブロック分け・自由記述欄） */
-  r.get("/projects/metrics", (c) => c.json({ groups: METRIC_GROUPS, notes: NOTE_FIELDS }));
+  r.get("/projects/metrics", (c) =>
+    c.json({
+      // どのブロックを誰が見るかを一緒に返す。入力画面に担当名を出すため
+      groups: METRIC_GROUPS.map((g) => ({ ...g, owner: GROUP_OWNER[g.id] ?? null, owner_name: employeeName(GROUP_OWNER[g.id] ?? "") })),
+      notes: NOTE_FIELDS,
+    }),
+  );
 
   r.post("/projects", async (c) => {
     const repo = new Repo(c.env.DB);

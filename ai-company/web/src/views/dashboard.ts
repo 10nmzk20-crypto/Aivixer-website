@@ -28,6 +28,7 @@ export async function renderDashboard(main: HTMLElement) {
   };
   const dept = (key: Employee["department"], label: string) => {
     const list = d.employees.filter((e) => e.department === key);
+    if (list.length === 0) return ""; // 社員がいない部署は見出しごと出さない
     return `<div class="dept"><div class="eyebrow">${label} · ${list.length}</div><div class="staff${key === "command" ? " one" : ""}">${list.map((e) => card(e, d.employees.indexOf(e))).join("")}</div></div>`;
   };
 

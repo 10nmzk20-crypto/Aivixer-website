@@ -2,15 +2,16 @@ import { NonRetryableError } from "cloudflare:workflows";
 import type { Env } from "../env";
 import { Repo, type ProjectRow, type TaskRow } from "../db/repo";
 import { AiProviderError, getProvider, isAiDisabled, type AiProvider } from "../ai/provider";
-import { AnalysisSchema, SelectAnalystsSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema, type TaskProposal } from "../ai/schemas";
+import { AnalysisSchema, SynthesisSchema, TaskRevisionSchema, VerificationSchema, type TaskProposal } from "../ai/schemas";
 import { ANALYST_IDS, COMPANY_CONTEXT, EMPLOYEE_MAP, EXECUTOR_IDS, employeeName } from "../employees/roster";
 import { COMMANDER_PROMPTS } from "../employees/prompts-command";
+import { EXECUTION_PROMPTS } from "../employees/prompts-execution";
 import { detectRestrictedActions } from "../policy/restricted-actions";
 import { PRINCIPLES_PROMPT } from "../principles";
 import { checkType, computeLeverage, leverageWarning } from "../analysis/leverage";
 import { compareForRanking, evaluateFrames, frameWarning, type FramesResult } from "../analysis/frames";
 import type { LeverageFields } from "../db/repo";
-import { METRIC_GROUPS, SOURCE_LABEL, metricLabel, normalizeInputData, type NormalizedInput } from "../metrics";
+import { METRIC_GROUPS, OWNER_QUESTION, SOURCE_LABEL, metricLabel, normalizeInputData, ownersWithData, type NormalizedInput } from "../metrics";
 import { computeDerived, totalBookings, type DerivedKpi } from "../analysis/derived";
 import type { ComparisonResult } from "../analysis/compare";
 import { FUNNEL_STATUS_JA, type FunnelResult } from "../analysis/funnel";
@@ -21,7 +22,6 @@ import { checkNumbers } from "../analysis/verify-numbers";
  * すべて「すでに保存済みなら何もしない」ように作ってあり、再実行しても二重登録しない。
  */
 
-const MAX_ANALYSTS = 4;
 
 function system(employeeId: string, override?: string): string {
   const def = EMPLOYEE_MAP[employeeId];
@@ -196,30 +196,24 @@ export async function selectAnalysts(env: Env, projectId: string): Promise<strin
   if (!project) throw new NonRetryableError("案件が見つかりません。");
   if (project.selected_analysts_json) return JSON.parse(project.selected_analysts_json);
 
+  // 数字が入っているツールの担当だけを呼ぶ。AI には選ばせない。
+  // 5 人しかいないうえ 1 人 1 ツールなので、入力を見れば誰を呼ぶかは決まる。
+  const input = normalizeInputData(project.input_data_json ? JSON.parse(project.input_data_json) : null);
+  const withData = ownersWithData(input);
   let selected: string[];
   let reason: string;
   if (project.analyst_mode === "all") {
     selected = [...ANALYST_IDS];
     reason = "代表の指定により全員が分析します。";
+  } else if (withData.length > 0) {
+    selected = withData;
+    const names = selected.map((id) => EMPLOYEE_MAP[id]?.name ?? id).join("・");
+    const empty = ANALYST_IDS.filter((id) => !withData.includes(id)).map((id) => EMPLOYEE_MAP[id]?.name ?? id);
+    reason = `数字が入っているのは ${names} の担当分でした。` + (empty.length ? `${empty.join("・")}は今回の入力に数字が無いため呼んでいません。` : "");
   } else {
-    const ai = provider(env);
-    const roster = ANALYST_IDS.map((id) => `- ${id}: ${EMPLOYEE_MAP[id].name}`).join("\n");
-    try {
-      const { data } = await ai.generateJSON({
-        system: system("commander", COMMANDER_PROMPTS.select),
-        user: `分析部の一覧:\n${roster}\n\n今回の入力:\n${formatInput(project)}\n\n相談を分類し、招集する担当（2〜4 名）の id を analysts に入れてください。`,
-        schema: SelectAnalystsSchema,
-        maxTokens: 1500,
-      });
-      selected = [...new Set(data.analysts.filter((id) => ANALYST_IDS.includes(id)))].slice(0, MAX_ANALYSTS);
-      reason = `分類: ${data.category}。${data.reason}`;
-    } catch (err) {
-      throw asWorkflowError(err);
-    }
-    if (selected.length === 0) {
-      selected = ["data", "sales", "customer"];
-      reason = "自動選択の結果が空だったため、基本の 3 名を割り当てました。";
-    }
+    // 数字が無く、相談文だけの場合。結果を持っている担当に見てもらう
+    selected = ["booking"];
+    reason = "数字の入力が無かったため、予約・入会担当だけが相談内容を見ます。";
   }
   await repo.updateProject(projectId, { selected_analysts_json: JSON.stringify(selected), selection_reason: reason });
   for (const id of selected) await repo.markAnalysisRunning(projectId, id);
@@ -389,7 +383,7 @@ export async function produceOutput(env: Env, taskId: string, revisionNote: stri
 
   const ai = provider(env);
   try {
-    const { text, usage } = await ai.generateText({ system: system(task.executor_employee_id), user: parts.filter(Boolean).join("\n\n") });
+    const { text, usage } = await ai.generateText({ system: system(task.executor_employee_id, EXECUTION_PROMPTS.produce), user: parts.filter(Boolean).join("\n\n") });
     const out = await repo.createOutput({
       task_id: taskId,
       employee_id: task.executor_employee_id,
@@ -495,7 +489,7 @@ export async function verifyTask(env: Env, taskId: string): Promise<string> {
 
   const ai = provider(env);
   try {
-    const { data, usage } = await ai.generateJSON({ system: system("kpi"), user, schema: VerificationSchema, maxTokens: 3000 });
+    const { data, usage } = await ai.generateJSON({ system: system("commander", EXECUTION_PROMPTS.verify), user, schema: VerificationSchema, maxTokens: 3000 });
     const row = await repo.createVerification({
       task_id: taskId,
       ...data,

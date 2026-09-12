@@ -3,7 +3,8 @@ import { esc, parseNum, toast } from "../components";
 
 /**
  * ② データ・相談入力 → ［分析開始］
- * 最初は「基本」ブロックだけ開いた状態にし、Google 系の詳細は必要なときだけ開く。
+ * ブロックは集客の流れ順（検索 → 地図 → サイト → 行動 → 予約・入会）。
+ * 1 ブロック 1 担当なので、見出しに担当名を出して「誰が見る数字か」を分かるようにする。
  */
 export async function renderNewAnalysis(main: HTMLElement) {
   const { groups, notes } = await api.get<{ groups: MetricGroup[]; notes: NoteField[] }>("/api/projects/metrics");
@@ -18,7 +19,7 @@ export async function renderNewAnalysis(main: HTMLElement) {
     const noteFields = notes.filter((n) => n.group === g.id);
     const filled = `<span class="count" data-count="${esc(g.id)}"></span>`;
     return `<details class="block" data-group="${esc(g.id)}"${g.open ? " open" : ""}>
-      <summary><span class="nm">${esc(g.label)}</span><span class="desc">${esc(g.description)}</span>${filled}</summary>
+      <summary><span class="nm">${esc(g.label)}${g.owner_name ? `<span class="owner">${esc(g.owner_name)}</span>` : ""}</span><span class="desc">${esc(g.description)}</span>${filled}</summary>
       <div class="block-body">
         <div class="grid3">${g.metrics.map(field).join("")}</div>
         ${g.id === "gsc" ? keywordsBlock() : ""}
@@ -46,7 +47,7 @@ export async function renderNewAnalysis(main: HTMLElement) {
     <div class="card" style="margin-top:14px">
       <div class="grid2">
         <label class="f">追加データ（表や CSV の貼り付け、任意）<textarea id="f-extra" placeholder="例: 退会理由の内訳、競合の料金 など" style="min-height:80px"></textarea></label>
-        <label class="f">分析担当の選び方<select id="f-mode"><option value="auto">経営司令塔が自動で選ぶ（推奨）</option><option value="all">分析部 8 人全員に分析させる</option></select></label>
+        <label class="f">分析担当の選び方<select id="f-mode"><option value="auto">数字が入っているツールの担当だけ（推奨）</option><option value="all">5 人全員に分析させる</option></select></label>
       </div>
     </div>
 

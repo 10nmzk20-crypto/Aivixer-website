@@ -3,12 +3,6 @@ import { z } from "zod";
 /** AI に返させる JSON の形。プロバイダ層はこの形を保証して返す。 */
 
 // ---------- 経営司令塔: 分析担当の招集 ----------
-export const SelectAnalystsSchema = z.object({
-  category: z.string().describe("相談の分類（例: 入会導線 / 集客 / 継続 / 収益 / 商品 / 競合 / 全体）"),
-  analysts: z.array(z.string()).describe("今回招集する分析担当の id（2〜4 名）"),
-  reason: z.string().describe("その担当を選んだ理由（1〜2 文）"),
-});
-export type SelectAnalystsResult = z.infer<typeof SelectAnalystsSchema>;
 
 // ---------- 分析担当の回答（統一フォーマット） ----------
 export const EvidenceSchema = z.object({
