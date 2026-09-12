@@ -1,0 +1,3 @@
+# Life Design ViXer の社内用ツール。検索エンジンには一切載せない。
+User-agent: *
+Disallow: /

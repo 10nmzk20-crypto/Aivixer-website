@@ -168,8 +168,14 @@ ANTHROPIC_API_KEY=sk-ant-... npm run ai:check
    Cloudflare ダッシュボード → Zero Trust → Access → Applications → 「Add an application」→ Self-hosted。
    Application domain に上の URL、Policy に許可するメールアドレスを登録。作成後に表示される **Application Audience (AUD) Tag** をコピーし、
    `wrangler.jsonc` の `CF_ACCESS_TEAM_DOMAIN`（Zero Trust のチーム名。`https://<チーム名>.cloudflareaccess.com` の部分）と `CF_ACCESS_AUD` に入れて `npm run deploy` し直します。
-7. **iPad で開く** — Safari で URL を開き、共有メニューの「ホーム画面に追加」を押すとアプリのように使えます。
-8. （任意）独自ドメイン `ai.<既存ドメイン>` を Worker の Custom Domain として追加できます。HP のドメイン設定は変更しません。
+7. **検索に載らないことの確認**（公開後に 1 回）
+   ブラウザで `https://<公開した URL>/robots.txt` を開き、`Disallow: /` が出れば正しく入っています。
+   HTML にも `noindex` を入れてあるため、検索エンジンには載りません。
+   ただし **URL を知っている人はログイン画面まで到達できます**（数字は認証なしでは一切出ません）。
+   ログイン画面すら見せたくない場合は、手順 6 の Cloudflare Access を使ってください。
+   Cloudflare が入口で止めるため、認証していない相手には画面のファイルすら渡りません。
+8. **iPad で開く** — Safari で URL を開き、共有メニューの「ホーム画面に追加」を押すとアプリのように使えます。
+9. （任意）独自ドメイン `ai.<既存ドメイン>` を Worker の Custom Domain として追加できます。HP のドメイン設定は変更しません。
 
 ## 設定値（`wrangler.jsonc` の `vars`）
 
