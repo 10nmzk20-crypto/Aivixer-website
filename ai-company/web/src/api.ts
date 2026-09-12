@@ -93,7 +93,7 @@ export interface Decision { id: string; version: number; top_issue: string; reas
 export interface RosterEntry { id: string; name: string }
 
 /** 担当 1 人分の分析。アプリが数字から組み立てる */
-export interface Finding { problem: string; fix: string; weight: number }
+export interface Finding { problem: string; fix: string; basis: string; weight: number }
 export interface ToolReview {
   id: string; name: string; tool: string; question: string;
   verdict: "good" | "watch" | "problem" | "no_data";

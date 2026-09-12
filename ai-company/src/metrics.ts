@@ -213,8 +213,13 @@ export function normalizeInputData(raw: unknown): NormalizedInput {
     for (const row of obj.keywords as Array<Record<string, unknown>>) {
       const keyword = String(row?.keyword ?? "").trim();
       if (!keyword) continue;
+      // 未入力は null のまま返す。Number("") は 0 になるため、空かどうかを先に見る
       const num = (x: unknown) => {
-        const n = typeof x === "number" ? x : Number(String(x ?? "").replace(/[,，\s%]/g, ""));
+        if (x === null || x === undefined) return null;
+        if (typeof x === "number") return Number.isFinite(x) ? x : null;
+        const t = String(x).replace(/[,，\s%]/g, "").trim();
+        if (t === "") return null;
+        const n = Number(t);
         return Number.isFinite(n) ? n : null;
       };
       out.keywords.push({ keyword: keyword.slice(0, 60), impressions: num(row.impressions), clicks: num(row.clicks), ctr: num(row.ctr), position: num(row.position) });

@@ -18,6 +18,8 @@ export interface Finding {
   problem: string;
   /** 改善案（次に何をするか） */
   fix: string;
+  /** 判断根拠。どのしきい値でそう判定したか。ChatGPT にこの判断自体を検証させるために出す */
+  basis: string;
   /** 深刻さ。大きいほど優先。総合レポートの並び替えに使う */
   weight: number;
 }
@@ -95,6 +97,7 @@ function reviewSearch(v: Record<string, number>, kpi: Map<string, DerivedKpi>, i
       weight: 3,
       problem: `検索結果に出た回数は ${impRate > 0 ? "+" : ""}${impRate}% 増えているのに、押された回数は ${clickRate}% と増えていません。見られてはいるが選ばれていません。`,
       fix: "検索結果に出るタイトルと説明文を見直す。「高知」「24時間」「見学無料」など、探している人が知りたい言葉を先頭に入れる。一度直せば、その後もずっと効き続けます。",
+      basis: "前月比で表示回数が +5% 以上なのにクリック数が 0% 以下のとき、「見られているが選ばれていない」と判定しています。",
     });
   }
   if (ctr !== null && ctr < 2) {
@@ -102,19 +105,21 @@ function reviewSearch(v: Record<string, number>, kpi: Map<string, DerivedKpi>, i
       weight: 3,
       problem: `押された割合（CTR）が ${pct(ctr)} です。検索結果に出ても、ほとんど選ばれていません。`,
       fix: "上位に出ているページのタイトルと説明文を書き直す。競合の検索結果と並べて見比べ、選ばれる理由が一目で分かる文にする。",
+      basis: "CTR（検索クリック数 ÷ 検索表示回数）が 2% 未満を「ほとんど選ばれていない」と判定しています。",
     });
   } else if (ctr !== null && ctr < 4) {
-    findings.push({ weight: 1, problem: `押された割合（CTR）が ${pct(ctr)} で、やや低めです。`, fix: "主要ページのタイトルと説明文を、探している人の言葉に寄せて見直す。" });
+    findings.push({ weight: 1, problem: `押された割合（CTR）が ${pct(ctr)} で、やや低めです。`, fix: "主要ページのタイトルと説明文を、探している人の言葉に寄せて見直す。", basis: "CTR が 2% 以上 4% 未満を「やや低い」と判定しています。" });
   }
   if (v.gsc_position !== undefined && v.gsc_position > 10) {
     findings.push({
       weight: 3,
       problem: `平均掲載順位が ${fmt(v.gsc_position, " 位")}。検索結果の 2 ページ目以降が中心で、ほとんど見られていません。`,
       fix: "検索されている言葉に正面から答えるページを作る。「高知 ジム 初心者」「24時間 ジム 高知」など、1 つの言葉に 1 ページを当てる。記事は一度書けば働き続けます。",
+      basis: "平均掲載順位が 10 位より下（検索結果の 2 ページ目以降）を「ほとんど見られていない」と判定しています。",
     });
   }
   if (impRate !== null && impRate <= -10) {
-    findings.push({ weight: 2, problem: `検索結果に出た回数が前月比 ${impRate}% と落ちています。`, fix: "順位が下がったページを特定し、情報が古くなっていないか確認して書き足す。" });
+    findings.push({ weight: 2, problem: `検索結果に出た回数が前月比 ${impRate}% と落ちています。`, fix: "順位が下がったページを特定し、情報が古くなっていないか確認して書き足す。", basis: "検索表示回数が前月比 -10% 以下を「落ちている」と判定しています。" });
   }
 
   // キーワードごとの順位
@@ -125,6 +130,7 @@ function reviewSearch(v: Record<string, number>, kpi: Map<string, DerivedKpi>, i
       weight: 2,
       problem: `${names}${lowRank.length > 3 ? " ほか" : ""}が 10 位より下です。表示はされていても、ほぼ見られていません。`,
       fix: "この言葉で探している人が知りたいことを 1 ページにまとめて公開する。まず 11〜20 位のものから手を付けると、上がりやすいです。",
+      basis: "入力されたキーワードのうち、平均掲載順位が 10 位より下のものを挙げています。",
     });
   }
 
@@ -172,15 +178,17 @@ function reviewSite(v: Record<string, number>, kpi: Map<string, DerivedKpi>, cmp
       weight: 3,
       problem: `サイトに来た人のうち、見学・体験ページまで進んだのは ${pct(toTrial)} だけです。ほとんどの人が入口で終わっています。`,
       fix: "トップページの目立つ位置に「見学・体験はこちら」を置く。料金ページの本文の最後にも同じ案内を置く。1 回作れば、その後ずっと働きます。",
+      basis: "見学・体験ページ閲覧数 ÷ ユーザー数 が 10% 未満を「入口で終わっている」と判定しています。",
     });
   } else if (toTrial !== null && toTrial < 20) {
-    findings.push({ weight: 1, problem: `見学・体験ページまで進んだのは ${pct(toTrial)} です。`, fix: "トップと料金ページから見学ページへの案内を、もう 1 か所増やす。" });
+    findings.push({ weight: 1, problem: `見学・体験ページまで進んだのは ${pct(toTrial)} です。`, fix: "トップと料金ページから見学ページへの案内を、もう 1 か所増やす。", basis: "見学・体験ページ閲覧数 ÷ ユーザー数 が 10% 以上 20% 未満を「やや低い」と判定しています。" });
   }
   if (ctaRate !== null && ctaRate < 10) {
     findings.push({
       weight: 3,
       problem: `見学・体験ページは見られているのに、ボタンを押したのは ${pct(ctaRate)} だけです。ページを読んだあとで止まっています。`,
       fix: "ページの中で不安が解消されていない可能性が高い。料金・持ち物・当日の流れ・辞め方をボタンの手前に書き、ボタンはページの上と下の 2 か所に置く。",
+      basis: "見学・体験 CTA クリック数 ÷ 見学・体験ページ閲覧数 が 10% 未満を「読んだあとで止まっている」と判定しています。",
     });
   }
   if (usersRate !== null && trialRate !== null && usersRate >= 5 && trialRate <= -5) {
@@ -188,16 +196,18 @@ function reviewSite(v: Record<string, number>, kpi: Map<string, DerivedKpi>, cmp
       weight: 2,
       problem: `来た人は ${usersRate > 0 ? "+" : ""}${usersRate}% 増えたのに、見学ページの閲覧は ${trialRate}% と減っています。入口から先の案内が届いていません。`,
       fix: "増えた人がどのページから入っているかを確認し、そのページから見学ページへの案内を足す。",
+      basis: "前月比でユーザー数が +5% 以上、見学・体験ページ閲覧数が -5% 以下のときに判定しています。",
     });
   }
   if (usersRate !== null && usersRate <= -10) {
-    findings.push({ weight: 2, problem: `サイトに来た人が前月比 ${usersRate}% と減っています。`, fix: "検索担当と地図担当の数字を合わせて見る。見つけてもらう段階が落ちていないか確認する。" });
+    findings.push({ weight: 2, problem: `サイトに来た人が前月比 ${usersRate}% と減っています。`, fix: "検索担当と地図担当の数字を合わせて見る。見つけてもらう段階が落ちていないか確認する。", basis: "ユーザー数が前月比 -10% 以下を「減っている」と判定しています。" });
   }
   if (v.ga4_pv_price !== undefined && v.ga4_pv_trial !== undefined && v.ga4_pv_price > v.ga4_pv_trial * 2) {
     findings.push({
       weight: 2,
       problem: `料金ページ（${fmt(v.ga4_pv_price, " 回")}）が見学・体験ページ（${fmt(v.ga4_pv_trial, " 回")}）の 2 倍以上見られています。料金を見たあとで進んでいない人が多い可能性があります。`,
       fix: "料金ページの本文の最後に「まず見学だけでも大丈夫です」と、見学への案内を置く。金額の近くに、何が含まれるかを並べて書く。",
+      basis: "料金ページ閲覧数が見学・体験ページ閲覧数の 2 倍を超えるときに判定しています。",
     });
   }
 
@@ -240,6 +250,7 @@ function reviewBehavior(v: Record<string, number>, input: NormalizedInput, cmp: 
       weight: 3,
       problem: `見学・体験ボタンの位置まで届いたのは ${pct(v.clarity_cta_reach)} だけです。多くの人は、ボタンがあることに気づかないまま離れています。`,
       fix: "ボタンをページの上の方（最初の画面に入る位置）にも置く。1 か所増やすだけで、届く人数が変わります。",
+      basis: "CTA 到達率が 40% 未満を「気づかれていない」と判定しています。",
     });
   }
   if (v.clarity_scroll !== undefined && v.clarity_scroll < 50) {
@@ -247,6 +258,7 @@ function reviewBehavior(v: Record<string, number>, input: NormalizedInput, cmp: 
       weight: 2,
       problem: `平均でページの ${pct(v.clarity_scroll)} までしか読まれていません。下に書いてある内容は、ほぼ読まれていないと考えられます。`,
       fix: "いちばん伝えたいこと（料金・見学の案内・ViXer の強み）を、ページの上半分に移す。",
+      basis: "平均スクロール率が 50% 未満を「下は読まれていない」と判定しています。",
     });
   }
   // 少数のデッドクリックはどのサイトにもある。本物のボタンが押された回数と比べて多いときだけ問題にする
@@ -259,6 +271,7 @@ function reviewBehavior(v: Record<string, number>, input: NormalizedInput, cmp: 
         weight: heavy ? 3 : 1,
         problem: `押しても何も起きなかった箇所が ${fmt(v.clarity_dead_clicks, " 回")} あります。${heavy ? "本物のボタンが押された回数と同じかそれ以上で、ボタンが分かりにくくなっています。" : ""}`,
         fix: "押されている場所を確認し、そこを本物のリンクにするか、押せないと分かる見た目に直す。",
+        basis: "デッドクリック数が主要 CTA クリック数以上なら重大、3 割以上なら注意として判定しています（CTA 数の入力が無い場合は 20 回以上）。少数はどのサイトにもあるため拾いません。",
       });
     }
   }
@@ -268,10 +281,11 @@ function reviewBehavior(v: Record<string, number>, input: NormalizedInput, cmp: 
       weight: 2,
       problem: `いらだって連打された箇所が ${fmt(v.clarity_rage_clicks, " 回")} あります。反応が無い、または遅い場所があります。`,
       fix: "連打されている場所を開いて動作を確認する。読み込みが遅い画像があれば軽くする。",
+      basis: "レイジクリック数が 5 回以上のときに判定しています。",
     });
   }
   if (note && findings.length === 0) {
-    findings.push({ weight: 1, problem: `録画の所見: ${note}`, fix: "気づいた箇所を 1 つだけ選び、直したあと翌月の数字で確かめる。" });
+    findings.push({ weight: 1, problem: `録画の所見: ${note}`, fix: "気づいた箇所を 1 つだけ選び、直したあと翌月の数字で確かめる。", basis: "数字からは問題が出ませんでしたが、録画の所見が入力されているため挙げています。件数の裏付けはありません。" });
   }
 
   if (v.clarity_scroll === undefined) missing.push("平均スクロール率");
@@ -315,6 +329,7 @@ function reviewMap(v: Record<string, number>, kpi: Map<string, DerivedKpi>, cmp:
       weight: 3,
       problem: `地図で表示された人のうち、サイトを見に来たのは ${pct(clickRate)} だけです。見つけてはもらえているのに、次に進まれていません。`,
       fix: "プロフィールの写真を増やし（館内・マシン・入口）、営業時間と説明文を埋める。「24時間」「見学無料」など、その場で知りたいことを説明文の先頭に書く。一度埋めれば、ずっと効きます。",
+      basis: "Web サイトクリック数 ÷ プロフィール表示回数 が 3% 未満を「次に進まれていない」と判定しています。",
     });
   }
   if (v.gbp_rating !== undefined && v.gbp_rating < 4.0) {
@@ -322,12 +337,14 @@ function reviewMap(v: Record<string, number>, kpi: Map<string, DerivedKpi>, cmp:
       weight: 3,
       problem: `口コミの平均評価が ${fmt(v.gbp_rating)} です。近くのジムと並べて比較されたときに、外される可能性があります。`,
       fix: "低い評価の内容を読み、同じ指摘が続いているなら現場で直す。そのうえで、満足している会員に口コミをお願いする仕組み（退会時ではなく、続いている人への館内掲示）を用意する。",
+      basis: "口コミ平均評価が 4.0 未満を「比較で外される可能性がある」と判定しています。",
     });
   } else if (v.gbp_reviews_total !== undefined && v.gbp_reviews_total < 20) {
     findings.push({
       weight: 2,
       problem: `口コミが ${fmt(v.gbp_reviews_total, " 件")}しかありません。比較の段階で判断材料が少ない状態です。`,
       fix: "口コミをお願いする QR コードを館内に掲示する。スタッフが毎回声をかけるのではなく、置いておく形にする。",
+      basis: "口コミ件数が 20 件未満を「判断材料が少ない」と判定しています。",
     });
   }
   const impRate = changeRate(cmp, "gbp_impressions");
@@ -337,10 +354,11 @@ function reviewMap(v: Record<string, number>, kpi: Map<string, DerivedKpi>, cmp:
       weight: 2,
       problem: `表示は ${impRate > 0 ? "+" : ""}${impRate}% 増えたのに、サイトを押した人は ${clickChange}% と減っています。`,
       fix: "プロフィールの写真と説明文を更新する。新しい写真を数枚足すだけでも、見られ方が変わります。",
+      basis: "前月比で表示回数が +5% 以上、Web サイトクリック数が -5% 以下のときに判定しています。",
     });
   }
   if (impRate !== null && impRate <= -10) {
-    findings.push({ weight: 2, problem: `地図・検索での表示が前月比 ${impRate}% と落ちています。`, fix: "営業時間・写真・説明文が古くなっていないか確認して更新する。情報が新しいほど表示されやすくなります。" });
+    findings.push({ weight: 2, problem: `地図・検索での表示が前月比 ${impRate}% と落ちています。`, fix: "営業時間・写真・説明文が古くなっていないか確認して更新する。情報が新しいほど表示されやすくなります。", basis: "プロフィール表示回数が前月比 -10% 以下を「落ちている」と判定しています。" });
   }
 
   if (v.gbp_impressions === undefined) missing.push("プロフィール表示回数");
@@ -394,6 +412,7 @@ function reviewBooking(v: Record<string, number>, kpi: Map<string, DerivedKpi>, 
       weight: 3,
       problem: `予約した人のうち実際に来たのは ${pct(showRate)} です。予約から当日までの間に、かなり抜けています。`,
       fix: "予約の確認メールに、当日の流れ・持ち物・駐車場・所要時間を書いて自動で送る。1 回作れば、以後すべての予約に効きます。",
+      basis: "実来館人数 ÷ 見学・体験予約数 が 70% 未満を「予約から当日までに抜けている」と判定しています。",
     });
   }
   if (visitJoin !== null && visitJoin < 30) {
@@ -401,6 +420,7 @@ function reviewBooking(v: Record<string, number>, kpi: Map<string, DerivedKpi>, 
       weight: 3,
       problem: `見学に来た人のうち入会したのは ${pct(visitJoin)} です。来てもらえているのに、そこで決まっていません。`,
       fix: "見学のときに渡す 1 枚（料金・辞め方・初日の流れ・混む時間帯）を作り、同じ内容を Web にも置く。その場で決めきれない人が、持ち帰って読めるようにする。",
+      basis: "本入会（直接 + お試し経由）÷ 実来館人数 が 30% 未満を「その場で決まっていない」と判定しています。",
     });
   }
   if (trialRate !== null && trialJoin !== null && trialJoin < 50) {
@@ -408,6 +428,7 @@ function reviewBooking(v: Record<string, number>, kpi: Map<string, DerivedKpi>, 
       weight: 2,
       problem: `30日お試しから本入会に進んだのは ${pct(trialJoin)} です。お試し期間中に続ける理由ができていない可能性があります。`,
       fix: "目的別のセルフメニュー（20 分 / 30 分 / 45 分）を用意し、お試し初日に渡す。何をすればいいか分からないまま終わるのを防ぐ。",
+      basis: "30日お試しから本入会 ÷ 30日お試し開始人数 が 50% 未満のときに判定しています。",
     });
   }
   if (net !== null && net < 0) {
@@ -415,15 +436,17 @@ function reviewBooking(v: Record<string, number>, kpi: Map<string, DerivedKpi>, 
       weight: 3,
       problem: `退会が新規入会を上回り、会員数が ${net} 人の純減です。`,
       fix: "入り口を増やす前に、まず辞める理由を分類する。1 か月だけ退会理由を記録し、いちばん多い理由を 1 つ仕組みで潰す。",
+      basis: "新規入会者数 − 退会者数 がマイナスのときに判定しています。",
     });
   } else if (churnRate !== null && churnRate > 5) {
-    findings.push({ weight: 2, problem: `月間の退会率が ${pct(churnRate)} です。`, fix: "退会理由を記録して分類する。最も多い理由から、人手をかけずに減らせる形を考える。" });
+    findings.push({ weight: 2, problem: `月間の退会率が ${pct(churnRate)} です。`, fix: "退会理由を記録して分類する。最も多い理由から、人手をかけずに減らせる形を考える。", basis: "退会者数 ÷ 月末会員数 が 5% を超えるときに判定しています。" });
   }
   if (v.inquiries !== undefined && bookings !== undefined && v.inquiries > 0 && bookings / v.inquiries < 0.5) {
     findings.push({
       weight: 2,
       problem: `問い合わせ ${fmt(v.inquiries, " 件")}に対して予約は ${fmt(bookings, " 件")}です。問い合わせたあとで止まっている人がいます。`,
       fix: "問い合わせへの返信に、予約ページへの直リンクと候補日時を最初から入れる。やり取りの往復を減らす。",
+      basis: "見学・体験予約数 ÷ 問い合わせ数 が 50% 未満のときに判定しています。",
     });
   }
 

@@ -1,9 +1,10 @@
-import { api, type Project, type Report, type ToolReview, type OverallReview } from "../api";
+import { api, type Project, type ToolReview, type OverallReview } from "../api";
+import { buildGptReport, buildRawNumbers } from "../report-text";
 import { esc, fmtDate, toast } from "../components";
 
 /**
  * ③ 分析結果。
- * 上から「今月やるべきこと（最大 3 つ）」→「担当 5 人の結果」→「ChatGPT 用レポート」。
+ * 上から「今月やるべきこと（最大 3 つ）」→「担当 5 人の結果」→「GPT 用レポートのコピー」。
  * 代表が上から読んで、次に何をするかが分かれば終わり。
  */
 
@@ -26,7 +27,7 @@ export async function renderProject(main: HTMLElement, params: Record<string, st
     ${reportSection()}
   </section>`;
 
-  setupReport(project.id, main);
+  setupReport(project, main);
 }
 
 /** 今月やるべきこと。いちばん上に置く */
@@ -90,57 +91,65 @@ function reviewBlock(v: ToolReview, weakest: boolean): string {
   </details>`;
 }
 
-/** ChatGPT 用レポート（任意） */
+/**
+ * GPT 用レポートのコピー。
+ * 画面に出ている内容から組み立てるので、押した瞬間にコピーが終わる（通信なし）。
+ */
 function reportSection(): string {
   return `<div class="sec">
-    <div class="sec-head"><h2>ChatGPT でさらに深く見る</h2><div class="hint">任意</div></div>
+    <div class="sec-head"><h2>ChatGPT で総括する</h2><div class="hint">5 領域を横断して判断させます</div></div>
     <div class="report-card">
-      <p class="dim">上の分析はアプリが数字から出したものです。さらに深く考えたいときは、レポートを作って ChatGPT に貼り付けてください。</p>
-      <div class="r"><button type="button" class="btn primary" id="make-report">レポートを作る</button><button type="button" class="btn" id="copy-report" hidden>全文コピー</button></div>
-      <pre class="report-text" id="report-text" hidden></pre>
+      <p class="dim">上の分析は領域ごとのものです。ChatGPT に 1 回貼り付けると、集客全体としてどこが詰まっているかを判断させられます。</p>
+      <div class="r">
+        <button type="button" class="btn primary" id="copy-gpt">GPT用レポートをコピー</button>
+        <button type="button" class="btn sm" id="copy-raw">生データだけコピー</button>
+      </div>
+      <p class="dim sub-note">「生データだけコピー」は、アプリの分析文を入れずに数字だけを渡します。アプリの判断そのものを ChatGPT にゼロから検証させたいときに使ってください。</p>
+      <textarea class="copy-buffer" id="copy-buffer" readonly aria-hidden="true" tabindex="-1"></textarea>
     </div>
   </div>`;
 }
 
-function setupReport(projectId: string, main: HTMLElement) {
-  const make = main.querySelector<HTMLButtonElement>("#make-report");
-  const copy = main.querySelector<HTMLButtonElement>("#copy-report");
-  const box = main.querySelector<HTMLPreElement>("#report-text");
-  if (!make || !copy || !box) return;
-
-  make.addEventListener("click", async () => {
-    make.disabled = true;
-    make.textContent = "作成中…";
+/**
+ * クリップボードにコピーする。
+ * iPad の Safari では navigator.clipboard が使えないことがあるため、
+ * 画面外のテキスト欄に入れて選択 → execCommand("copy") に切り替える。
+ */
+async function copyText(text: string, buffer: HTMLTextAreaElement): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
     try {
-      const { report } = await api.post<{ report: Report }>(`/api/projects/${projectId}/report`);
-      box.textContent = report.content;
-      box.hidden = false;
-      copy.hidden = false;
-      make.textContent = "作り直す";
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "レポートを作れませんでした。");
-      make.textContent = "レポートを作る";
-    } finally {
-      make.disabled = false;
-    }
-  });
-
-  copy.addEventListener("click", async () => {
-    const text = box.textContent ?? "";
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(text);
-      ok = true;
+      buffer.value = text;
+      buffer.hidden = false;
+      buffer.focus();
+      buffer.setSelectionRange(0, text.length);
+      const ok = document.execCommand?.("copy") ?? false;
+      buffer.hidden = true;
+      return ok;
     } catch {
-      // iPad Safari など、クリップボードが使えない環境では文字を選択状態にする
-      const sel = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(box);
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-      ok = document.execCommand?.("copy") ?? false;
+      buffer.hidden = true;
+      return false;
     }
-    copy.textContent = ok ? "コピーしました" : "長押しでコピーしてください";
-    setTimeout(() => (copy.textContent = "全文コピー"), 2000);
-  });
+  }
+}
+
+function setupReport(project: Project, main: HTMLElement) {
+  const buffer = main.querySelector<HTMLTextAreaElement>("#copy-buffer");
+  if (!buffer) return;
+
+  const wire = (id: string, label: string, build: () => string) => {
+    const btn = main.querySelector<HTMLButtonElement>(id);
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const ok = await copyText(build(), buffer);
+      btn.textContent = ok ? "コピーしました" : "コピーできませんでした";
+      if (!ok) toast("この端末ではコピーできませんでした。画面を長押しして選択してください。");
+      setTimeout(() => (btn.textContent = label), 2000);
+    });
+  };
+
+  wire("#copy-gpt", "GPT用レポートをコピー", () => buildGptReport(project));
+  wire("#copy-raw", "生データだけコピー", () => buildRawNumbers(project));
 }

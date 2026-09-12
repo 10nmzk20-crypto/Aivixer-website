@@ -461,3 +461,7 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 
 .report-card { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .report-card .r { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* コピー用の隠しテキスト欄。iPad で execCommand を使うときだけ一瞬だけ見える位置に置く */
+.copy-buffer { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+.report-card .sub-note { margin: 0; font-size: 11.5px; line-height: 1.7; }
