@@ -1,21 +1,66 @@
 :root {
-  --bg: #0A0A0A; --side: #0E0E0E; --surface: #141414; --surface-2: #1B1B1B;
-  --line: #262626; --line-strong: #3A3A3A;
-  --text: #F2F2F2; --text-2: #C9C9C9; --muted: #8E8E8E; --faint: #5C5C5C; --accent: #FFFFFF;
-  --display: "Cormorant Garamond", "Times New Roman", serif;
-  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", sans-serif;
-  --mono: "JetBrains Mono", Menlo, monospace;
+  /* ---- 面。奥から手前へ。紙を重ねるように 1 段ずつ明るくする ---- */
+  --bg: #0B0B0C;          /* いちばん奥（画面の地） */
+  --side: #0E0E10;        /* 左の帯 */
+  --surface: #141416;     /* カード */
+  --surface-2: #1A1A1D;   /* カードの中の一段沈んだ面 */
+  --field: #18181B;       /* 入力欄 */
+
+  /* ---- 線 ---- */
+  --line: #2A2A2E;        /* ふだんの境界 */
+  --line-strong: #3A3A40; /* 強調したい境界 */
+
+  /* ---- 文字。3 段階。長く読んでも疲れない明るさにする ---- */
+  --text: #F4F4F2;        /* 本文・数字 */
+  --text-2: #CBCBD2;      /* 説明文 */
+  --muted: #A1A1AA;       /* ラベル・補足 */
+  --faint: #71717A;       /* いちばん薄い注記 */
+
+  /* ---- アクセント。金を「選択中・入力中・重要な数字・主要ボタン」だけに使う ---- */
+  --accent: #C6A76A;
+  --accent-dim: #A98C56;      /* ホバーなど、少し沈めたいとき */
+  --accent-ink: #15120B;      /* 金の上に置く文字 */
+  --accent-soft: rgba(198, 167, 106, .10); /* 入力中の下地 */
+
+  /* ---- 状態。彩度を落として、画面がうるさくならないようにする ---- */
+  --good: #8FAE93;        /* 正常・完了 */
+  --good-ink: #0F1510;
+  --bad: #C2857A;         /* 問題あり。真っ赤にしない */
+  --bad-ink: #180E0C;
+  --bad-soft: rgba(194, 133, 122, .10);
+
+  /* ---- 書体。見出しだけセリフ体、本文と数字はサンセリフ体 ---- */
+  --display: "Cormorant Garamond", "Noto Serif JP", "Hiragino Mincho ProN", serif;
+  --body: "Inter", "Noto Sans JP", "Hiragino Sans", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Noto Sans JP", Menlo, monospace;
+
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html { background: var(--bg); }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--body); font-weight: 300; font-size: 15px; line-height: 1.7; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--body); font-weight: 400; font-size: 15.5px; line-height: 1.8;
+  -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%;
+  /* 数字は桁を縦に揃える。表や前月比を目で比べるため */
+  font-variant-numeric: tabular-nums;
+}
 a { color: inherit; text-decoration: none; }
 button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
-button:focus-visible, a:focus-visible, [tabindex]:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
-input, textarea, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line-strong); border-radius: 3px; padding: 10px 12px; min-height: 44px; width: 100%; font-weight: 300; }
-textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
+button:focus-visible, a:focus-visible, [tabindex]:focus-visible, summary:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible { outline: none; }
+input, textarea, select {
+  font: inherit; color: var(--text); background: var(--field);
+  border: 1px solid var(--line); border-radius: 3px;
+  padding: 11px 13px; min-height: 46px; width: 100%; font-weight: 400;
+  transition: border-color .14s, background .14s;
+}
+/* 入力中。金の細い枠。光らせない */
+input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--accent-soft); }
+/* 数字の入力欄は、桁が比べられるように等幅にする */
+input[inputmode="decimal"], input[inputmode="numeric"], input[type="number"] { font-family: var(--mono); font-size: 15px; letter-spacing: .01em; }
+textarea { min-height: 120px; resize: vertical; line-height: 1.75; font-family: var(--body); }
 ::placeholder { color: var(--faint); }
 h1, h2, h3, h4 { text-wrap: balance; }
 
@@ -50,9 +95,9 @@ h2 span { font-family: var(--body); font-size: 12px; color: var(--muted); margin
 .sec-head .hint a, .sec-head .hint button { color: var(--muted); text-decoration: underline; text-underline-offset: 4px; min-height: 44px; display: inline-flex; align-items: center; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 24px; border-radius: 3px; border: 1px solid var(--line-strong); font-size: 15px; font-weight: 400; letter-spacing: .04em; white-space: nowrap; transition: border-color .15s, background .15s, opacity .15s; }
-.btn:hover { border-color: var(--text); }
-.btn.primary { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
-.btn.primary:hover { background: #E3E3E3; }
+.btn:hover { border-color: var(--accent); color: var(--text); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 500; }
+.btn.primary:hover { background: var(--accent-dim); border-color: var(--accent-dim); }
 .btn.big { min-height: 56px; padding: 0 34px; font-size: 16px; }
 .btn.sm { min-height: 40px; padding: 0 16px; font-size: 13px; }
 .btn[disabled] { opacity: .4; cursor: default; }
@@ -126,7 +171,7 @@ label.f input, label.f select, label.f textarea { letter-spacing: 0; font-size: 
 .stp:last-child { border-right: 0; }
 .stp .mk { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line-strong); display: grid; place-items: center; flex: none; font-size: 9px; }
 .stp[data-s="active"] { color: var(--text); } .stp[data-s="active"] .mk { border-color: var(--accent); } .stp[data-s="active"] .mk::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.1s ease-in-out infinite; }
-.stp[data-s="done"] { color: var(--muted); } .stp[data-s="done"] .mk { background: var(--accent); border-color: var(--accent); color: #0A0A0A; } .stp[data-s="done"] .mk::after { content: "✓"; }
+.stp[data-s="done"] { color: var(--muted); } .stp[data-s="done"] .mk { background: var(--good); border-color: var(--good); color: var(--good-ink); } .stp[data-s="done"] .mk::after { content: "✓"; }
 .input-sum { margin-top: 14px; display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: start; }
 .nums { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .nums b { color: var(--text); font-weight: 400; }
@@ -215,7 +260,7 @@ body[data-ai="mock"] .side .foot { color: var(--muted); }
 .panel .r { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .panel .seg { display: flex; gap: 6px; }
 .panel .seg button { flex: 1; min-height: 44px; border: 1px solid var(--line-strong); border-radius: 3px; font-size: 14px; }
-.panel .seg button[aria-pressed="true"] { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.panel .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .placeholder { color: var(--faint); font-size: 14px; padding: 18px; }
 .hist-list .row { grid-template-columns: 64px 1fr auto; }
 
@@ -251,7 +296,7 @@ body[data-ai="mock"] .side .foot { color: var(--muted); }
 .sheet .item .t { color: var(--text-2); }
 .sheet .item .t.faint { color: var(--faint); }
 
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--accent); color: #0A0A0A; padding: 12px 20px; border-radius: 3px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30; max-width: min(90vw, 560px); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 12px 20px; border-radius: 3px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 30; max-width: min(90vw, 560px); }
 .toast[data-show="1"] { opacity: 1; transform: translateX(-50%); }
 
 .login { max-width: 420px; margin: 10vh auto 0; display: flex; flex-direction: column; gap: 16px; }
@@ -325,8 +370,8 @@ label.f.note { margin-top: 14px; }
 .fstage[data-s="good"] .fstatus { border-color: var(--text); color: var(--text); }
 .fstage[data-s="watch"] { border-color: var(--line-strong); }
 .fstage[data-s="watch"] .fstatus { border-style: dashed; border-color: var(--text); color: var(--text); }
-.fstage[data-s="problem"] { border-color: var(--accent); background: var(--surface-2); }
-.fstage[data-s="problem"] .fstatus { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.fstage[data-s="problem"] { border-color: var(--bad); background: var(--surface-2); }
+.fstage[data-s="problem"] .fstatus { background: var(--bad); color: var(--bad-ink); border-color: var(--bad); }
 .fstage[data-s="no_data"] { opacity: .55; }
 .freason { margin: 0; font-size: 12px; color: var(--text-2); }
 .fmetrics { margin: 0; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
@@ -358,7 +403,7 @@ details.missing ul { margin: 6px 0 0; padding-left: 18px; color: var(--faint); }
 }
 @media (max-width: 560px) { .funnel { grid-template-columns: 1fr; } }
 
-.acc .body .unverified { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 3px; font-size: 12px; color: var(--text); background: var(--surface-2); }
+.acc .body .unverified { margin: 0 0 12px; padding: 9px 13px; border: 1px solid var(--bad); border-radius: 3px; font-size: 12.5px; color: var(--text); background: var(--bad-soft); }
 
 .sheet ul.guide { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-2); }
 .sheet ul.guide li { margin-bottom: 5px; }
@@ -381,11 +426,11 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 .lev[data-type="C"] { border-style: dashed; }
 .lev-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lev-type { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 2px; border: 1px solid var(--line-strong); font-family: var(--mono); font-size: 12px; flex: none; }
-.lev[data-type="A"] .lev-type { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.lev[data-type="A"] .lev-type { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .lev-type-label { font-size: 12px; color: var(--text-2); }
 .lev-hw { font-size: 11px; letter-spacing: .08em; border: 1px solid var(--line-strong); border-radius: 2px; padding: 2px 8px; color: var(--muted); white-space: nowrap; }
-.lev[data-hw="decrease"] .lev-hw { border-color: var(--text); color: var(--text); }
-.lev[data-hw="increase"] .lev-hw { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.lev[data-hw="decrease"] .lev-hw { border-color: var(--good); color: var(--good); }
+.lev[data-hw="increase"] .lev-hw { background: var(--bad); color: var(--bad-ink); border-color: var(--bad); }
 .lev-score { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); cursor: help; }
 .lev-note { margin: 8px 0 0; font-size: 12px; color: var(--text-2); }
 /* 施策カードは 3 列に並ぶため、画面幅ではなくカード自身の幅で列数を決める。
@@ -395,22 +440,22 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 .lev-grid dt { color: var(--faint); letter-spacing: .04em; white-space: nowrap; }
 .lev-grid dd { margin: 0; font-family: var(--mono); color: var(--text-2); white-space: nowrap; }
 .lev-manual { margin: 8px 0 0; font-size: 12px; color: var(--text-2); border-left: 1px solid var(--line-strong); padding-left: 10px; }
-.lev-warn { margin: 8px 0 0; padding: 6px 10px; border: 1px solid var(--accent); border-radius: 2px; font-size: 11px; color: var(--text); }
+.lev-warn { margin: 9px 0 0; padding: 7px 11px; border: 1px solid var(--bad); border-radius: 2px; font-size: 11.5px; color: var(--text); background: var(--bad-soft); }
 .tbadge { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--mono); font-size: 11px; color: var(--muted); vertical-align: 1px; }
-.tbadge[data-type="A"] { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+.tbadge[data-type="A"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 @media (max-width: 560px) { .lev-score { margin-left: 0; } }
 
 /* 経営判断の 3 軸（老子 / 孫子 / 孔子）。思想名は装飾せず、記号だけを読ませる */
 .frm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin-top: 8px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-2); }
-.frm[data-reject="1"] { border-color: var(--accent); }
+.frm[data-reject="1"] { border-color: var(--bad); }
 .frm-type { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line-strong); border-radius: 2px; font-family: var(--mono); font-size: 11px; flex: none; }
 .frm-item { display: inline-flex; align-items: baseline; gap: 4px; padding: 1px 6px; border-radius: 2px; cursor: help; white-space: nowrap; }
 .frm-name { font-size: 10px; letter-spacing: .06em; color: var(--faint); }
 .frm-mark { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
 .frm-item[data-mark="◎"] .frm-mark { color: var(--text); }
 /* × は反転。ひと目で「この軸に反する」と分かるようにする */
-.frm-item[data-mark="×"] { background: var(--accent); }
-.frm-item[data-mark="×"] .frm-name, .frm-item[data-mark="×"] .frm-mark { color: #0A0A0A; }
+.frm-item[data-mark="×"] { background: var(--bad); }
+.frm-item[data-mark="×"] .frm-name, .frm-item[data-mark="×"] .frm-mark { color: var(--bad-ink); }
 .frm-note { margin: 6px 0 0; font-size: 11px; color: var(--text-2); display: flex; gap: 8px; }
 .frm-note span { flex: none; font-size: 10px; letter-spacing: .06em; color: var(--faint); padding-top: 1px; }
 
@@ -437,17 +482,17 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 /* 担当ごとの分析 */
 .revs { display: flex; flex-direction: column; gap: 8px; }
 .rev { border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
-.rev[data-verdict="problem"] { border-color: var(--line-strong); }
+.rev[data-verdict="problem"] { border-color: var(--bad); }
 .rev[data-verdict="no_data"] { opacity: .62; }
 .rev > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: baseline; }
 .rev > summary::-webkit-details-marker { display: none; }
 .rev > summary:hover { background: var(--surface-2); }
 .rev-name { font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
-.rev-weak { font-size: 10px; letter-spacing: .08em; background: var(--accent); color: #0A0A0A; border-radius: 2px; padding: 2px 7px; white-space: nowrap; }
+.rev-weak { font-size: 10.5px; letter-spacing: .08em; background: var(--accent); color: var(--accent-ink); border-radius: 2px; padding: 3px 8px; white-space: nowrap; font-weight: 500; }
 .rev-q { grid-column: 1; font-size: 12px; color: var(--muted); }
 .rev-v { grid-column: 2; grid-row: 1 / span 2; justify-self: end; font-size: 11px; letter-spacing: .06em; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 2px; padding: 3px 9px; white-space: nowrap; align-self: center; }
-.rev[data-verdict="problem"] .rev-v { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
-.rev[data-verdict="good"] .rev-v { color: var(--text-2); border-color: var(--text-2); }
+.rev[data-verdict="problem"] .rev-v { background: var(--bad); color: var(--bad-ink); border-color: var(--bad); }
+.rev[data-verdict="good"] .rev-v { color: var(--good); border-color: var(--good); }
 .rev-body { padding: 2px 16px 16px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--line); margin-top: 2px; padding-top: 15px; }
 .rev-part h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 400; }
 .rev-part ul { margin: 0; padding-left: 17px; font-size: 13px; color: var(--text-2); line-height: 1.8; }
@@ -465,3 +510,102 @@ textarea.report-text { width: 100%; min-height: 360px; max-height: 60vh; font-fa
 /* コピー用の隠しテキスト欄。iPad で execCommand を使うときだけ一瞬だけ見える位置に置く */
 .copy-buffer { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
 .report-card .sub-note { margin: 0; font-size: 11.5px; line-height: 1.7; }
+
+/* ============================================================
+   仕上げ: 数字を主役に / 余白 / 入力の 3 段階
+   ここから下は、上の指定を意図的に上書きする
+   ============================================================ */
+
+/* ---- 見出しはセリフ体。日本語は Noto Serif JP が受ける ---- */
+h1, .brand .name, .sec-head h2, .rank h2 { font-family: var(--display); font-weight: 500; letter-spacing: .015em; }
+.sec-head h2 { font-size: 26px; line-height: 1.3; }
+h1 { font-weight: 500; }
+/* 見出し以外はサンセリフ体に戻す。セリフ体を多用しない */
+h3, h4, .act-do, .fnd-p, .rev-name { font-family: var(--body); }
+
+/* ---- 数字を主役にする ---- */
+/* 「現状」「傾向」の行は、数字だけ少し大きく太く見せる */
+.rev-part ul li, .act-why, .fnd-p { font-variant-numeric: tabular-nums; }
+.rev-part ul li { font-size: 13.5px; line-height: 1.95; color: var(--text-2); }
+.rev-part ul li b, .num { font-family: var(--mono); font-size: 1.08em; font-weight: 500; color: var(--text); letter-spacing: .01em; }
+/* 「今月やるべきこと」の番号 */
+.act-no { font-family: var(--display); font-weight: 500; }
+
+/* ---- 分析結果: 数字 → 判断 → 改善案 の区切りを見せる ---- */
+.rev-body { gap: 0; padding-top: 4px; }
+.rev-part { padding: 16px 0; border-top: 1px solid var(--line); }
+.rev-part:first-child { border-top: 0; padding-top: 12px; }
+.rev-part h4 { margin-bottom: 9px; color: var(--muted); font-size: 11px; letter-spacing: .14em; }
+/* 「問題点と改善案」は 1 段引き立てる。ここがいちばん読ませたい */
+.fnd { border-left: 2px solid var(--accent); padding: 2px 0 2px 14px; margin-bottom: 16px; }
+.fnd:last-child { margin-bottom: 0; }
+.fnd-p { font-size: 14px; line-height: 1.9; margin-bottom: 9px; }
+.fnd-f { font-size: 13.5px; line-height: 1.9; color: var(--text-2); }
+.fnd-f span { color: var(--accent); letter-spacing: .1em; }
+
+/* ---- 今月やるべきこと ---- */
+.act { padding: 19px 20px; gap: 16px; border-radius: 3px; }
+.act:first-child { border-color: var(--accent); }
+.act:first-child .act-no { color: var(--accent); }
+.act-do { font-size: 15.5px; line-height: 1.9; }
+.act-why { border-left-color: var(--line-strong); padding-left: 13px; line-height: 1.85; font-size: 13px; }
+.headline { font-size: 15.5px; line-height: 1.95; color: var(--text); margin-bottom: 20px; }
+
+/* ---- 担当ごとの見出し ---- */
+.rev > summary { padding: 16px 18px; gap: 5px 14px; }
+.rev-name { font-size: 14.5px; font-weight: 500; }
+.rev-q { font-size: 12px; color: var(--muted); }
+.rev-v { font-size: 11px; letter-spacing: .1em; padding: 4px 11px; }
+
+/* ---- 入力画面: 未入力 / 入力中 / 入力済み の 3 段階 ---- */
+.block { border-radius: 3px; }
+.block > summary { padding: 15px 17px; }
+.block-body { padding: 6px 17px 20px; gap: 18px; }
+.grid, .grid3 { gap: 16px; }
+.f { gap: 7px; font-size: 12.5px; color: var(--muted); letter-spacing: .02em; }
+
+/* 入力済み: 枠を少し起こし、ラベルの先頭に ✓ を出す（どの欄のものか迷わないよう行内に置く） */
+.f[data-filled="1"] > input, .f[data-filled="1"] > textarea { border-color: var(--line-strong); background: var(--surface-2); color: var(--text); }
+.f[data-filled="1"] { color: var(--text-2); }
+.f .fl { display: inline-flex; align-items: baseline; gap: 6px; }
+.f[data-filled="1"] .fl::after { content: "✓"; color: var(--good); font-family: var(--mono); font-size: 11px; }
+/* 入力中がいちばん強い。金の枠（上の input:focus と揃える） */
+.f:focus-within { color: var(--accent); }
+
+/* 入力ブロックの見出し。担当名の札で折り返さないようにする */
+details.block > summary { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+details.block > summary .nm { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; line-height: 1.4; }
+details.block > summary .desc { grid-column: 2; font-size: 12px; line-height: 1.6; }
+details.block > summary .count { grid-column: 3; grid-row: 1 / span 2; align-self: center; }
+@media (max-width: 860px) {
+  details.block > summary .desc { display: none; } /* 狭い画面では説明を畳む */
+}
+
+/* ブロックの入力数。入っていれば金で出す */
+.block .cnt[data-filled="1"], .block .count[data-filled="1"] { color: var(--accent); }
+
+/* ---- 余白を全体に少し足す ---- */
+.sec { margin-top: 38px; }
+.sec-head { margin-bottom: 18px; }
+.acts { gap: 12px; }
+.revs { gap: 10px; }
+.blocks { gap: 10px; }
+.main { padding-block: 32px 96px; }
+.report-card { padding: 20px; gap: 15px; }
+
+/* ---- 左の帯 ---- */
+.side .foot { color: var(--faint); line-height: 1.8; }
+.nav a { font-size: 14.5px; }
+.nav a[aria-current="page"] { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+
+/* ---- iPad で読みやすくする ---- */
+@media (max-width: 1024px) {
+  body { font-size: 16px; }
+  .rev-part ul li { font-size: 14px; }
+  .act-do { font-size: 16px; }
+}
+
+/* 文章の中の数字。本文より少し大きく、少し太く。等幅で桁が揃う */
+b.num { font-family: var(--mono); font-size: 1.06em; font-weight: 500; color: var(--text); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.fnd-p b.num { font-size: 1.08em; }
+.act-why b.num { color: var(--text); }

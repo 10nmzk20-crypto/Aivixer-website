@@ -10,6 +10,15 @@ import { esc, fmtDate, toast } from "../components";
 
 const VERDICT_JA: Record<string, string> = { good: "良好", watch: "注意", problem: "問題あり", no_data: "データなし" };
 
+/**
+ * 文章の中の数字を少し大きく太く見せる。分析ツールなので数字が先に目に入ってほしい。
+ * esc() で記号を無害化したあとに実行するので、ここでタグを足しても安全。
+ */
+function emphNum(escaped: string): string {
+  // 単位（回・位・件 など）は本文の書体のまま残す。等幅にすると間延びして読みにくい
+  return escaped.replace(/[+\-−]?\d[\d,]*(?:\.\d+)?%?/g, (m) => `<b class="num">${m}</b>`);
+}
+
 export async function renderProject(main: HTMLElement, params: Record<string, string>) {
   const { project } = await api.get<{ project: Project }>(`/api/projects/${params.id}`);
   const review = project.review;
@@ -39,7 +48,7 @@ function actionsSection(r: OverallReview): string {
             <span class="act-no">${a.rank}</span>
             <div class="act-body">
               <p class="act-do">${esc(a.action)}</p>
-              <p class="act-why"><span>なぜ</span>${esc(a.why)}</p>
+              <p class="act-why"><span>なぜ</span>${emphNum(esc(a.why))}</p>
               <p class="act-from">${esc(a.from)}の指摘</p>
             </div>
           </li>`,
@@ -64,7 +73,7 @@ function reviewsSection(r: OverallReview): string {
 }
 
 function reviewBlock(v: ToolReview, weakest: boolean): string {
-  const list = (items: string[]) => items.map((t) => `<li>${esc(t)}</li>`).join("");
+  const list = (items: string[]) => items.map((t) => `<li>${emphNum(esc(t))}</li>`).join("");
   // 最初から開くのは、いちばん詰まっている 1 つだけ。
   // 全部開くと画面が長くなり、5〜10 分で読み終わらないため
   const open = weakest ? " open" : "";
@@ -80,7 +89,7 @@ function reviewBlock(v: ToolReview, weakest: boolean): string {
       ${
         v.findings.length
           ? `<div class="rev-part"><h4>問題点と改善案</h4>${v.findings
-              .map((f) => `<div class="fnd"><p class="fnd-p">${esc(f.problem)}</p><p class="fnd-f"><span>改善案</span>${esc(f.fix)}</p></div>`)
+              .map((f) => `<div class="fnd"><p class="fnd-p">${emphNum(esc(f.problem))}</p><p class="fnd-f"><span>改善案</span>${esc(f.fix)}</p></div>`)
               .join("")}</div>`
           : v.verdict === "no_data"
             ? '<div class="rev-part"><p class="dim">このツールの数字が入力されていません。</p></div>'

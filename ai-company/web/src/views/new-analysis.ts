@@ -13,7 +13,7 @@ export async function renderNewAnalysis(main: HTMLElement) {
   const defaultPeriod = `${lastMonth.getFullYear()} 年 ${lastMonth.getMonth() + 1} 月`;
 
   const field = (m: MetricGroup["metrics"][number]) =>
-    `<label class="f">${esc(m.label)}（${esc(m.unit)}）<input data-metric="${esc(m.id)}" inputmode="decimal" placeholder="—">${m.hint ? `<small class="hint">${esc(m.hint)}</small>` : ""}</label>`;
+    `<label class="f" data-filled="0"><span class="fl">${esc(m.label)}（${esc(m.unit)}）</span><input data-metric="${esc(m.id)}" inputmode="decimal" placeholder="—">${m.hint ? `<small class="hint">${esc(m.hint)}</small>` : ""}</label>`;
 
   const groupBlock = (g: MetricGroup) => {
     const noteFields = notes.filter((n) => n.group === g.id);
@@ -69,10 +69,18 @@ export async function renderNewAnalysis(main: HTMLElement) {
     let total = 0;
     for (const g of groups) {
       const inputs = [...main.querySelectorAll<HTMLInputElement>(`[data-group="${g.id}"] [data-metric]`)];
+      // 入力済みの欄に印を付ける。未入力 → 入力中 → 入力済み が一目で分かるようにする
+      for (const i of inputs) {
+        const label = i.closest<HTMLElement>("label.f");
+        if (label) label.dataset.filled = parseNum(i.value) !== null ? "1" : "0";
+      }
       const n = inputs.filter((i) => parseNum(i.value) !== null).length;
       total += n;
       const el = main.querySelector<HTMLElement>(`[data-count="${g.id}"]`);
-      if (el) el.textContent = n > 0 ? `${n} / ${inputs.length}` : "";
+      if (el) {
+        el.textContent = n > 0 ? `${n} / ${inputs.length}` : "";
+        el.dataset.filled = n > 0 ? "1" : "0";
+      }
     }
     const kw = main.querySelectorAll<HTMLInputElement>("[data-kw-keyword]");
     const kwFilled = [...kw].filter((i) => i.value.trim()).length;
